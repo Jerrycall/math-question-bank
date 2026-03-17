@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { openai } from "./client";
+import { getOpenAI } from "./client";
 
 const StructuredQuestionSchema = z.object({
   title: z.string().describe("题目标题，简洁描述考查内容"),
@@ -43,6 +43,7 @@ const SYSTEM_PROMPT = `你是一位专业的高中数学教师，擅长分析数
 export async function structurizeQuestion(
   rawText: string
 ): Promise<StructuredQuestion> {
+  const openai = getOpenAI();
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     response_format: { type: "json_object" },
@@ -80,6 +81,7 @@ export async function generateVariants(
   originalQuestion: string,
   originalAnalysis: string
 ): Promise<VariantQuestions> {
+  const openai = getOpenAI();
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     response_format: { type: "json_object" },
@@ -111,6 +113,7 @@ export async function explainQuestion(
   analysis: string,
   userQuery: string
 ): Promise<ReadableStream<Uint8Array>> {
+  const openai = getOpenAI();
   const stream = await openai.chat.completions.create({
     model: "gpt-4o",
     stream: true,
@@ -141,6 +144,7 @@ export async function explainQuestion(
 }
 
 export async function getEmbedding(text: string): Promise<number[]> {
+  const openai = getOpenAI();
   const response = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text.slice(0, 8000), // 限制长度
