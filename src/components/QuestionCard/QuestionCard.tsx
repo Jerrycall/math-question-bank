@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { MathRenderer } from "./MathRenderer";
 import {
   Question,
+  type Difficulty,
   DIFFICULTY_LABELS,
   DIFFICULTY_COLORS,
   TAG_TYPE_COLORS,
@@ -23,8 +24,14 @@ import {
   TagType,
 } from "@/types";
 
+/** 卡片展示用题目（API 返回可能不含 createdAt，枚举可能是 string） */
+export type QuestionCardQuestion = Omit<Question, "createdAt" | "difficulty"> & {
+  createdAt?: string | Date;
+  difficulty: Question["difficulty"] | string;
+};
+
 interface QuestionCardProps {
-  question: Question;
+  question: QuestionCardQuestion;
   showAnswer?: boolean;
   compact?: boolean;
 }
@@ -57,15 +64,15 @@ export function QuestionCard({
           </Link>
           <div className="flex items-center gap-2 shrink-0">
             <Badge
-              className={`text-xs ${DIFFICULTY_COLORS[question.difficulty]}`}
+              className={`text-xs ${DIFFICULTY_COLORS[question.difficulty as Difficulty]}`}
             >
               {"★".repeat(
                 { EASY: 1, MEDIUM_LOW: 2, MEDIUM: 3, MEDIUM_HIGH: 4, HARD: 5 }[
-                  question.difficulty
+                  question.difficulty as Difficulty
                 ]
               )}
               {" "}
-              {DIFFICULTY_LABELS[question.difficulty]}
+              {DIFFICULTY_LABELS[question.difficulty as Difficulty]}
             </Badge>
           </div>
         </div>

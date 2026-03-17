@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Network, Loader2 } from "lucide-react";
-import { QuestionCard } from "@/components/QuestionCard";
+import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
 import { Badge } from "@/components/ui/badge";
 import { TAG_TYPE_COLORS, TAG_TYPE_LABELS } from "@/types";
 
@@ -165,7 +165,7 @@ export function TagDetailClient({ slug }: { slug: string }) {
           <h2 className="font-semibold mb-4">该标签下全部题目（{tag.questions.length} 道）</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {(tag.questions || []).map(({ question }) => (
-              <QuestionCard key={question.id} question={question} />
+              <QuestionCard key={question.id} question={question as QuestionCardQuestion} />
             ))}
           </div>
         </div>

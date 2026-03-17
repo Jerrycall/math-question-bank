@@ -67,7 +67,7 @@ function DraggableNode({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = canDrop ? "move" : "none";
-    setDragOver(canDrop ?? false);
+    setDragOver(!!canDrop);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {

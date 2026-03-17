@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TagType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { GraphNode, GraphEdge } from "@/types";
 
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
 
   let questions;
 
-  const tagFilter = { where: { tag: { type: { not: "SOURCE" } } }, include: { tag: true } };
+  const tagFilter = { where: { tag: { type: { not: TagType.SOURCE } } }, include: { tag: true } };
 
   if (questionId) {
     const center = await db.question.findUnique({
