@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+// 题目难度枚举
+enum Difficulty {
+  EASY       // 1 - 简单
+  MEDIUM_LOW // 2 - 中低
+  MEDIUM     // 3 - 中等
+  MEDIUM_HIGH // 4 - 中高
+  HARD       // 5 - 困难
+}
+
+// 标签类型枚举
+enum TagType {
+  KNOWLEDGE // 知识点
+  METHOD    // 解题方法
+  THOUGHT   // 数学思想
+  SOURCE    // 来源
+}
+
+// 题目关联关系类型
+enum RelationType {
+  SIMILAR   // 相似题
+  VARIANT   // 变式题
+  ADVANCED  // 进阶题
+}
+
+// 题目主表
+model Question {
+  id          String     @id @default(cuid())
+  slug        String     @unique // 用于文件命名，如 q-001-derivative-monotone
+  title       String
+  content     String     @db.Text // 题目内容（Markdown）
+  answer      String     @db.Text // 标准答案
+  analysis    String     @db.Text // 详细解析
+  difficulty  Difficulty @default(MEDIUM)
+  source      String?    // 来源描述
+  sourceYear  Int?       // 来源年份
+  mdFilePath  String?    // 对应 Markdown 文件路径
+  embedding   Unsupported("vector(1536)")? // OpenAI text-embedding-3-small 维度
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // 关联
+  tags           QuestionTag[]
+  relationsFrom  QuestionRelation[] @relation("RelationFrom")
+  relationsTo    QuestionRelation[] @relation("RelationTo")
+  learningRecords LearningRecord[]
+  reviewSchedules ReviewSchedule[]
+
+  @@map("questions")
+}
+
+// 标签表（支持层级）
+model Tag {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique // 用于 URL，如 derivative
+  type        TagType
+  description String?
+  parentId    String?  // 层级支持，如 function -> quadratic-function
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  // 自引用层级
+  parent   Tag?  @relation("TagHierarchy", fields: [parentId], references: [id])
+  children Tag[] @relation("TagHierarchy")
+
+  // 关联
+  questions    QuestionTag[]
+  masteryRecords KnowledgeMastery[]
+
+  @@unique([name, type])
+  @@map("tags")
+}
+
+// 题目-标签关联（多对多）
+model QuestionTag {
+  questionId String
+  tagId      String
+  createdAt  DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+  @@map("question_tags")
+}
+
+// 题目双向关联
+model QuestionRelation {
+  id           String       @id @default(cuid())
+  fromId       String
+  toId         String
+  relationType RelationType
+
+  from Question @relation("RelationFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   Question @relation("RelationTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId])
+  @@map("question_relations")
+}
+
+// 用户表
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  settingsJson Json     @default("{}") // 用户偏好设置
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 关联
+  learningRecords  LearningRecord[]
+  reviewSchedules  ReviewSchedule[]
+  masteryRecords   KnowledgeMastery[]
+
+  @@map("users")
+}
+
+// 做题记录
+model LearningRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  questionId  String
+  isCorrect   Boolean
+  userAnswer  String?  @db.Text
+  timeSpentS  Int      // 耗时（秒）
+  answeredAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, answeredAt])
+  @@index([questionId])
+  @@map("learning_records")
+}
+
+// 间隔复习调度（SM-2 算法）
+model ReviewSchedule {
+  id           String   @id @default(cuid())
+  userId       String
+  questionId   String
+  dueDate      DateTime // 下次复习时间
+  intervalDays Int      @default(1) // 复习间隔天数
+  easeFactor   Float    @default(2.5) // 难易因子（SM-2）
+  repetitions  Int      @default(0) // 已复习次数
+  lastReviewAt DateTime? // 上次复习时间
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId, dueDate])
+  @@map("review_schedules")
+}
+
+// 知识点掌握度
+model KnowledgeMastery {
+  id              String   @id @default(cuid())
+  userId          String
+  tagId           String
+  masteryScore    Int      @default(0) // 0-100
+  totalAttempts   Int      @default(0)
+  correctAttempts Int      @default(0)
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagId])
+  @@map("knowledge_mastery")
+}
