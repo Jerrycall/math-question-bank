@@ -50,17 +50,24 @@ export function MathRenderer({ content, className }: MathRendererProps) {
               {children}
             </blockquote>
           ),
-          img: ({ src, alt, ...props }) => (
-            <span className="my-3 block">
-              <img
-                src={src ?? ""}
-                alt={alt ?? "题目图片"}
-                className="max-w-full h-auto rounded-lg border border-border"
-                loading="lazy"
-                {...props}
-              />
-            </span>
-          ),
+          img: ({ src, alt, ...props }) => {
+            // 相对路径转成站根绝对路径，避免在 /questions/xxx 等页面请求到错误地址
+            let imgSrc = src ?? "";
+            if (imgSrc && !/^https?:\/\//i.test(imgSrc) && !imgSrc.startsWith("/")) {
+              imgSrc = "/" + imgSrc;
+            }
+            return (
+              <span className="my-3 block">
+                <img
+                  src={imgSrc}
+                  alt={alt ?? "题目图片"}
+                  className="max-w-full h-auto rounded-lg border border-border"
+                  loading="lazy"
+                  {...props}
+                />
+              </span>
+            );
+          },
           code: ({ children, className: codeClass, ...props }) => {
             const isInline = !codeClass;
             if (isInline) {

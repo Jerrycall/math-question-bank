@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { put } from "@vercel/blob";
 
 const UPLOAD_DIR = "public/uploads";
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -9,7 +10,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 function safeFilename(originalName: string, mime: string): string {
   const ext = mime === "image/jpeg" ? "jpg" : mime.split("/")[1] || "png";
   const base = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return `${base}.${ext}`;
+  return `uploads/${base}.${ext}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -35,15 +36,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const filename = safeFilename(file.name, file.type);
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // 线上 Vercel 使用 Blob 存储，本地使用 public/uploads
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const blob = await put(filename, buffer, {
+        access: "public",
+        addRandomSuffix: false,
+      });
+      return NextResponse.json({ url: blob.url });
+    }
+
     const dir = join(process.cwd(), UPLOAD_DIR);
     await mkdir(dir, { recursive: true });
-    const filename = safeFilename(file.name, file.type);
-    const path = join(dir, filename);
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(path, buffer);
-
-    const url = `/uploads/${filename}`;
-    return NextResponse.json({ url });
+    const baseName = filename.replace(/^uploads\/?/, "");
+    await writeFile(join(dir, baseName), buffer);
+    return NextResponse.json({ url: `/uploads/${baseName}` });
   } catch (e) {
     console.error("Upload error:", e);
     return NextResponse.json(
