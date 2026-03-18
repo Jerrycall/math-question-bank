@@ -11,7 +11,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { existsSync, copyFileSync, mkdirSync } from "fs";
+import { existsSync, copyFileSync, mkdirSync, readdirSync } from "fs";
 import { join, dirname, resolve } from "path";
 
 const db = new PrismaClient();
@@ -106,18 +106,45 @@ function resolveImagePath(baseDir: string, rel: string): string | null {
     join(baseDir, "附件", rel),
     join(baseDir, "images", rel),
     join(baseDir, "图", rel),
+    join(baseDir, "Pasted", rel),
+    join(baseDir, "粘贴", rel),
     join(parent, "assets", rel),
     join(parent, "附件", rel),
     join(parent, "images", rel),
+    join(parent, "Pasted", rel),
     join(grandParent, "assets", rel),
     join(grandParent, "附件", rel),
     join(VAULT_ROOT, rel),
     join(VAULT_ROOT, "assets", rel),
     join(VAULT_ROOT, "附件", rel),
     join(VAULT_ROOT, "images", rel),
+    join(VAULT_ROOT, "Pasted", rel),
+    join(VAULT_ROOT, "粘贴", rel),
   ];
   for (const p of candidates) {
     if (existsSync(p)) return p;
+  }
+  // 若仍未找到，在流墨轩根目录下按文件名递归查找（适配 Obsidian 粘贴图等任意子目录）
+  if (VAULT_ROOT && rel && (rel.includes("Pasted") || rel.includes("粘贴") || /\.(png|jpg|jpeg|gif|webp)$/i.test(rel))) {
+    const found = findFileUnderDir(VAULT_ROOT, rel);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findFileUnderDir(dir: string, filename: string): string | null {
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isFile() && e.name === filename) return full;
+      if (e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules") {
+        const found = findFileUnderDir(full, filename);
+        if (found) return found;
+      }
+    }
+  } catch (_) {
+    // 忽略无权限等
   }
   return null;
 }

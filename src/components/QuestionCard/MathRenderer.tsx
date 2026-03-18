@@ -12,7 +12,18 @@ interface MathRendererProps {
   className?: string;
 }
 
+// 将 Obsidian 双链图片 ![[path]] 转为标准 Markdown ![](url)，便于显示
+function preprocessObsidianImages(text: string): string {
+  return text.replace(/!\s*\[\[([^\]]+)\]\]/g, (_, inner: string) => {
+    const path = inner.split("|")[0].trim();
+    if (!path) return "![]()";
+    if (/^https?:\/\//i.test(path) || path.startsWith("/")) return `![](${path})`;
+    return `![](/uploads/${encodeURIComponent(path)})`;
+  });
+}
+
 export function MathRenderer({ content, className }: MathRendererProps) {
+  const processedContent = preprocessObsidianImages(content);
   return (
     <div className={`prose prose-sm max-w-none dark:prose-invert ${className ?? ""}`}>
       <ReactMarkdown
@@ -91,7 +102,7 @@ export function MathRenderer({ content, className }: MathRendererProps) {
           },
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
