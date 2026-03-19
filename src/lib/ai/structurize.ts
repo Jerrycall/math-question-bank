@@ -176,7 +176,7 @@ const GgbCommandSchema = z.object({
             .map((s) => s.trim())
             .filter(Boolean)
     )
-    .pipe(z.array(z.string().min(1)).min(1).max(20))
+    .pipe(z.array(z.string().min(1)).min(1))
     .describe("GeoGebra 命令行列表，每行一个可直接粘贴到输入栏的命令"),
   summary: z
     .string()
@@ -278,12 +278,17 @@ function buildParabolaMustHaveCommands(
 function extractPointHints(text: string): string[] {
   const hints: string[] = [];
   const pointRegex = /([A-Z])\s*\(\s*([^\(\)]{1,40}?)\s*,\s*([^\(\)]{1,40}?)\s*\)/g;
+  // 只接受坐标是"纯数值表达式"的点，拒绝符号变量（x_1, y_1, t, ...）
+  const isNumeric = (s: string) =>
+    /^-?[0-9]/.test(s) && // 必须以数字或负号开头
+    /^[0-9\-+*/^().sqrt\s√]*$/.test(s.replace(/sqrt/g, "").replace(/√/g, ""));
   let m: RegExpExecArray | null = pointRegex.exec(text);
   while (m) {
     const name = m[1];
     const x = m[2].trim();
     const y = m[3].trim();
-    if (name && x && y) {
+    // 过滤掉符号坐标（如 x_1、y₁、a、t 等变量名）
+    if (name && x && y && isNumeric(x) && isNumeric(y)) {
       hints.push(`${name}=(${x},${y})`);
     }
     m = pointRegex.exec(text);
