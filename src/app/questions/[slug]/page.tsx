@@ -42,6 +42,7 @@ export default function QuestionDetailPage() {
   const [ggbSummary, setGgbSummary] = useState("");
   const [ggbNotes, setGgbNotes] = useState<string[]>([]);
   const [ggbLoading, setGgbLoading] = useState(false);
+  const [ggbRepairing, setGgbRepairing] = useState(false);
   const [ggbError, setGgbError] = useState("");
   const [ggbCopied, setGgbCopied] = useState(false);
 
@@ -184,6 +185,53 @@ export default function QuestionDetailPage() {
     }
   };
 
+  const handleRepairGgb = async (
+    failedLine: string,
+    errorHint: string
+  ): Promise<string[] | null> => {
+    if (!question?.content?.trim() || ggbCommands.length === 0) return null;
+    setGgbRepairing(true);
+    try {
+      const res = await fetch("/api/ai/ggb", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "repair",
+          text: question.content,
+          intent: ggbIntent,
+          answer: question.answer,
+          analysis: question.analysis,
+          tags: (question.tags ?? []).map((t) => t.tag.name),
+          commands: ggbCommands,
+          failedLine,
+          errorHint,
+        }),
+      });
+      const raw = await res.text();
+      let data: { error?: string; commands?: string[]; summary?: string; notes?: string[] } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        setGgbError("自动修复返回格式异常，请手动重试生成。");
+        return null;
+      }
+      if (!res.ok || data.error || !data.commands || data.commands.length === 0) {
+        setGgbError(data.error || `自动修复失败（${res.status}）`);
+        return null;
+      }
+      setGgbCommands(data.commands);
+      if (data.summary) setGgbSummary(data.summary);
+      if (data.notes) setGgbNotes(data.notes);
+      setGgbError("");
+      return data.commands;
+    } catch {
+      setGgbError("自动修复失败，请检查网络后重试。");
+      return null;
+    } finally {
+      setGgbRepairing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="animate-pulse space-y-4">
@@ -300,14 +348,14 @@ export default function QuestionDetailPage() {
           />
           <Button
             onClick={handleGenerateGgb}
-            disabled={ggbLoading}
+            disabled={ggbLoading || ggbRepairing}
             variant="secondary"
             className="w-full"
           >
-            {ggbLoading ? (
+            {ggbLoading || ggbRepairing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                生成命令中...
+                {ggbRepairing ? "自动修复命令中..." : "生成命令中..."}
               </>
             ) : (
               <>
@@ -353,7 +401,10 @@ export default function QuestionDetailPage() {
                   ))}
                 </div>
               )}
-              <GeoGebraPreview commands={ggbCommands} />
+              <GeoGebraPreview
+                commands={ggbCommands}
+                onCommandFailed={handleRepairGgb}
+              />
             </div>
           )}
         </CardContent>

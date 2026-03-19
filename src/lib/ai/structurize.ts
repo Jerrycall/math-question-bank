@@ -381,6 +381,80 @@ export async function generateGgbCommands(
   };
 }
 
+export async function repairGgbCommands(
+  questionText: string,
+  currentCommands: string[],
+  failedLine: string,
+  errorHint?: string,
+  userIntent?: string,
+  context?: GgbGenerateContext
+): Promise<GgbCommandResult> {
+  const openai = getChatClient();
+  const response = await openai.chat.completions.create({
+    model: getChatModel(),
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `你是 GeoGebra 命令修复器。请基于“已有命令 + 报错行”修复为可执行版本。
+
+硬性要求：
+1) 仅输出 JSON 对象：commands, summary, notes。
+2) commands 每项是一行可执行 GeoGebra 命令。
+3) 保留原命令含义，最小改动修复。
+4) 命令必须自包含，先定义后使用。
+5) 坐标点统一写 A=(x,y)，不要写 Point(x,y)。
+6) 不输出解释性英文句子，不要 markdown。`,
+      },
+      {
+        role: "user",
+        content: `题目：\n${questionText}
+
+作图需求：\n${userIntent?.trim() || "按题意作图"}
+
+参考答案：\n${context?.answer?.trim() || "(无)"}
+
+参考解析：\n${context?.analysis?.trim() || "(无)"}
+
+当前命令（待修复）：
+${currentCommands.join("\n")}
+
+执行失败命令：
+${failedLine}
+
+错误信息（若有）：
+${errorHint?.trim() || "(无)"}\n\n请返回修复后的完整 commands。`,
+      },
+    ],
+    temperature: 0.1,
+    max_tokens: 4096,
+  });
+
+  const jsonStr = response.choices[0]?.message?.content ?? "";
+  const parsed = parseJsonObjectFromModelContent(jsonStr);
+  const result = GgbCommandSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues
+      .slice(0, 6)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    throw new Error(`GGB 修复结果校验失败：${issues || result.error.message}`);
+  }
+
+  const normalizedCommands = result.data.commands
+    .map(sanitizeGgbCommandLine)
+    .filter(Boolean)
+    .slice(0, 20);
+  if (normalizedCommands.length === 0) {
+    throw new Error("修复后命令为空");
+  }
+
+  return {
+    ...result.data,
+    commands: normalizedCommands,
+  };
+}
+
 export async function explainQuestion(
   question: string,
   analysis: string,

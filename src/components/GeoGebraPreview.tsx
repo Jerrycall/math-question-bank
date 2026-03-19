@@ -16,6 +16,7 @@ declare global {
 interface GeoGebraPreviewProps {
   commands: string[];
   className?: string;
+  onCommandFailed?: (failedLine: string, errorHint: string) => Promise<string[] | null>;
 }
 
 const GGB_SCRIPT_SRC = "https://www.geogebra.org/apps/deployggb.js";
@@ -45,7 +46,11 @@ function ensureGgbScript(): Promise<void> {
   });
 }
 
-export function GeoGebraPreview({ commands, className }: GeoGebraPreviewProps) {
+export function GeoGebraPreview({
+  commands,
+  className,
+  onCommandFailed,
+}: GeoGebraPreviewProps) {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -108,7 +113,7 @@ export function GeoGebraPreview({ commands, className }: GeoGebraPreviewProps) {
     };
   }, [appletId, booted]);
 
-  const runCommands = () => {
+  const runCommands = async () => {
     setError("");
     try {
       const api = window[appletId] as
@@ -152,7 +157,23 @@ export function GeoGebraPreview({ commands, className }: GeoGebraPreviewProps) {
 
       if (pending.length > 0) {
         const first = pending[0];
-        setError(`第 ${first.index} 行命令执行失败：${first.cmd}`);
+        const errMsg = `第 ${first.index} 行命令执行失败：${first.cmd}`;
+        if (onCommandFailed) {
+          const repaired = await onCommandFailed(first.cmd, errMsg);
+          if (repaired && repaired.length > 0) {
+            // 只自动重试一轮，避免循环
+            if (typeof api.reset === "function") api.reset();
+            for (const item of repaired) {
+              const cmd = item.trim();
+              if (!cmd) continue;
+              if (!cmd.includes("(") && !cmd.includes("=")) continue;
+              if (/^note\s*:|^tips?\s*:|^the\s+/i.test(cmd)) continue;
+              api.evalCommand(cmd);
+            }
+            return;
+          }
+        }
+        setError(errMsg);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "命令执行失败");
