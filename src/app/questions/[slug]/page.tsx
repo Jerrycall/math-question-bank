@@ -67,6 +67,15 @@ export default function QuestionDetailPage() {
         body: JSON.stringify({ questionId: question.id, userQuery: aiQuery }),
       });
 
+      if (!res.ok) {
+        const errText = await res.text();
+        setAiResponse(
+          errText?.trim() ||
+            `请求失败（${res.status}）。请在 Vercel 配置 AI 相关环境变量并重新部署。`
+        );
+        return;
+      }
+
       if (!res.body) return;
 
       const reader = res.body.getReader();

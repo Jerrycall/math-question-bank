@@ -31,7 +31,17 @@ export async function POST(request: NextRequest) {
         "Transfer-Encoding": "chunked",
       },
     });
-  } catch {
-    return new Response("AI 服务暂时不可用", { status: 500 });
+  } catch (e) {
+    console.error("[api/ai/explain]", e);
+    const detail =
+      e instanceof Error ? e.message.trim().slice(0, 500) : "未知错误";
+    const hint =
+      detail && detail.length > 0
+        ? detail
+        : "AI 服务暂时不可用。请确认 Vercel 已配置 AI_API_KEY + AI_API_BASE_URL（DeepSeek）或 OPENAI_API_KEY，并已 Redeploy。";
+    return new Response(hint, {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
 }
