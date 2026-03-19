@@ -109,3 +109,16 @@
 .slide-in-from-top-2 {
   animation-name: slide-in-from-top-2;
 }
+
+/* 打印/导出 PDF：隐藏站点导航与页脚，保证只打印讲义内容 */
+@media print {
+  header,
+  footer {
+    display: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+}

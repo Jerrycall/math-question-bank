@@ -1,0 +1,57 @@
+.page {
+  width: 210mm;
+  margin: 0 auto;
+  padding: 24px 10mm 40px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.meta {
+  color: #6b7280;
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+
+.printButton {
+  margin-bottom: 16px;
+}
+
+.question {
+  margin-bottom: 22px;
+}
+
+.questionHead {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(107, 114, 128, 0.35);
+  margin: 14px 0;
+}
+
+@media print {
+  .printButton {
+    display: none !important;
+  }
+
+  .page {
+    padding: 0 !important;
+    width: 210mm !important;
+  }
+
+  .question {
+    break-after: page;
+  }
+
+  .question:last-child {
+    break-after: auto;
+  }
+}
+

@@ -56,10 +56,50 @@ model Question {
   tags           QuestionTag[]
   relationsFrom  QuestionRelation[] @relation("RelationFrom")
   relationsTo    QuestionRelation[] @relation("RelationTo")
+  collections    CollectionQuestion[]
   learningRecords LearningRecord[]
   reviewSchedules ReviewSchedule[]
 
   @@map("questions")
+}
+
+// 账号表（用于“我的题集”和导出 PDF）
+model Account {
+  id           String      @id @default(cuid())
+  username     String      @unique
+  passwordHash String
+  createdAt    DateTime    @default(now())
+
+  collections  Collection[]
+
+  @@map("accounts")
+}
+
+// 题集表
+model Collection {
+  id        String   @id @default(cuid())
+  name      String
+  accountId String
+  createdAt DateTime @default(now())
+
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  questions CollectionQuestion[]
+
+  @@map("collections")
+}
+
+// 题集-题目关联
+model CollectionQuestion {
+  collectionId String
+  questionId   String
+  sortOrder    Int      @default(0)
+  addedAt      DateTime @default(now())
+
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  question     Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, questionId])
+  @@map("collection_questions")
 }
 
 // 标签表（支持层级）

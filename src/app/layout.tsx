@@ -9,8 +9,10 @@ import {
   Tag,
   Brain,
   Home,
+  Bookmark,
 } from "lucide-react";
 import "./globals.css";
+import { UserMenu } from "@/components/UserMenu";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,6 +25,7 @@ const navItems = [
   { href: "/", icon: Home, label: "首页" },
   { href: "/questions", icon: BookOpen, label: "题库" },
   { href: "/tags", icon: Tag, label: "标签" },
+  { href: "/collections", icon: Bookmark, label: "题集" },
   { href: "/graph", icon: Network, label: "知识图谱" },
   { href: "/review", icon: RotateCcw, label: "复习" },
   { href: "/stats", icon: BarChart3, label: "统计" },
@@ -48,18 +51,23 @@ export default function RootLayout({
                 <span className="hidden sm:block">高中数学题库</span>
               </Link>
 
-              <nav className="flex items-center gap-1">
-                {navItems.map(({ href, icon: Icon, label }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden md:block">{label}</span>
-                  </Link>
-                ))}
-              </nav>
+              <div className="flex items-center gap-3">
+                <nav className="flex items-center gap-1">
+                  {navItems.map(({ href, icon: Icon, label }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="hidden md:block">{label}</span>
+                    </Link>
+                  ))}
+                </nav>
+                <div className="hidden sm:block">
+                  <UserMenu />
+                </div>
+              </div>
             </div>
           </header>
 

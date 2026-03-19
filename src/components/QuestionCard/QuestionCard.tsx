@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -9,6 +9,7 @@ import {
   AlertCircle,
   ArrowRight,
   Tag,
+  BookmarkPlus,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,15 @@ export type QuestionCardQuestion = Omit<Question, "createdAt" | "difficulty"> & 
   difficulty: Question["difficulty"] | string;
 };
 
+type MyCollectionSummary = {
+  id: string;
+  name: string;
+  _count?: { questions: number };
+};
+
+let myCollectionsCache: MyCollectionSummary[] | null = null;
+let myCollectionsCachePromise: Promise<MyCollectionSummary[]> | null = null;
+
 interface QuestionCardProps {
   question: QuestionCardQuestion;
   showAnswer?: boolean;
@@ -42,6 +52,102 @@ export function QuestionCard({
   compact = false,
 }: QuestionCardProps) {
   const [answerVisible, setAnswerVisible] = useState(showAnswer);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [collections, setCollections] = useState<MyCollectionSummary[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [addingToCollectionId, setAddingToCollectionId] = useState<string | null>(null);
+
+  const returnTo = useMemo(() => {
+    if (typeof window === "undefined") return "/questions";
+    const qs = window.location.search || "";
+    return `${window.location.pathname}${qs}`;
+  }, []);
+
+  async function loadMyCollections(forceRefresh = false) {
+    if (!forceRefresh && myCollectionsCache) {
+      setCollections(myCollectionsCache);
+      return;
+    }
+
+    if (!myCollectionsCachePromise || forceRefresh) {
+      myCollectionsCachePromise = (async () => {
+        const res = await fetch("/api/collections", { credentials: "include" });
+        if (!res.ok) return [];
+        const data = await res.json().catch(() => ({}));
+        const list = Array.isArray(data?.collections) ? data.collections : [];
+        myCollectionsCache = list;
+        return list as MyCollectionSummary[];
+      })();
+    }
+
+    const list = await myCollectionsCachePromise;
+    setCollections(list);
+  }
+
+  async function ensureAuthAndOpen() {
+    setPickerOpen(true);
+    setPickerLoading(true);
+    try {
+      const meRes = await fetch("/api/auth/me", { credentials: "include" });
+      if (!meRes.ok) {
+        window.location.href = `/login?returnTo=${encodeURIComponent(returnTo)}`;
+        return;
+      }
+      await loadMyCollections(false);
+    } finally {
+      setPickerLoading(false);
+    }
+  }
+
+  async function addToCollection(collectionId: string) {
+    if (addingToCollectionId) return;
+    setAddingToCollectionId(collectionId);
+    try {
+      const res = await fetch(`/api/collections/${collectionId}/questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ questionIds: [question.id] }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || "添加失败");
+        return;
+      }
+      setPickerOpen(false);
+    } catch (e) {
+      console.error("addToCollection error:", e);
+      alert("添加失败");
+    } finally {
+      setAddingToCollectionId(null);
+    }
+  }
+
+  async function createCollectionAndRefresh() {
+    const name = window.prompt("请输入题集名称（最多 50 字）");
+    if (!name) return;
+
+    setPickerLoading(true);
+    try {
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || "创建失败");
+        return;
+      }
+      myCollectionsCache = null;
+      myCollectionsCachePromise = null;
+      await loadMyCollections(true);
+    } finally {
+      setPickerLoading(false);
+    }
+  }
 
   const knowledgeTags =
     question.tags?.filter((t) => t.tag.type === "KNOWLEDGE") ?? [];
@@ -74,6 +180,68 @@ export function QuestionCard({
               {" "}
               {DIFFICULTY_LABELS[question.difficulty as Difficulty]}
             </Badge>
+
+            {!compact && (
+              <div className="relative">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="h-8 w-8"
+                  onClick={() => {
+                    if (pickerOpen) setPickerOpen(false);
+                    else ensureAuthAndOpen();
+                  }}
+                  title="加入我的题集"
+                >
+                  <BookmarkPlus className="h-4 w-4" />
+                </Button>
+
+                {pickerOpen && (
+                  <div className="absolute right-0 mt-2 w-76 max-w-[calc(100vw-2rem)] bg-background border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                    <div className="px-3 py-2 text-sm font-semibold border-b border-border/60">
+                      加入到题集
+                    </div>
+                    <div className="p-3 space-y-2">
+                      {pickerLoading ? (
+                        <div className="text-sm text-muted-foreground">加载中...</div>
+                      ) : collections.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">
+                          你还没有题集。可以先新建一个。
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-52 overflow-auto pr-1">
+                          {collections.map((c) => (
+                            <Button
+                              key={c.id}
+                              variant="secondary"
+                              className="w-full justify-start"
+                              disabled={addingToCollectionId === c.id}
+                              onClick={() => addToCollection(c.id)}
+                            >
+                              {addingToCollectionId === c.id
+                                ? "添加中..."
+                                : c.name}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="pt-1">
+                        <Button
+                          type="button"
+                          className="w-full"
+                          variant="outline"
+                          onClick={createCollectionAndRefresh}
+                        >
+                          + 新建题集
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
