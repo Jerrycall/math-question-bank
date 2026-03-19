@@ -224,6 +224,9 @@ function extractEquationHints(text: string): string[] {
     if (!eq.includes("=")) continue;
     if (!/[xy]/i.test(eq)) continue;
     if (eq.length < 3 || eq.length > 80) continue;
+    // 仅保留“纯数学字符”方程，避免把中文说明拼进命令
+    const asciiLikeMath = /^[A-Za-z0-9_+\-*/^=().,<>|[\]{}\\]*$/;
+    if (!asciiLikeMath.test(eq)) continue;
     hints.push(eq);
   }
   return Array.from(new Set(hints)).slice(0, 6);
@@ -265,6 +268,8 @@ function sanitizeGgbCommandLine(line: string): string {
   ) {
     return "";
   }
+  // 含中文通常是解释文本，不是可执行命令
+  if (/[\u4e00-\u9fff]/.test(s)) return "";
 
   // 移除行内注释（保留真正命令）
   s = s.replace(/\s*(\/\/|#).+$/, "").trim();
