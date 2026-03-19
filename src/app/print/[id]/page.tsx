@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -7,6 +8,37 @@ import { DIFFICULTY_LABELS, type Difficulty } from "@/types";
 import { PrintButton } from "./PrintButton";
 import styles from "./print.module.css";
 import { cn } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
+
+/** 浏览器「另存为 PDF」默认文件名通常取自 document.title，需去掉文件名非法字符 */
+function titleForPdfFilename(name: string): string {
+  const trimmed = name.trim() || "题集";
+  return trimmed.replace(/[/\\:*?"<>|#\n\r\t]/g, "_").slice(0, 120);
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
+  const token = cookies().get(SESSION_COOKIE)?.value;
+  const accountId = token ? verifySession(token) : null;
+  if (!accountId) {
+    return { title: "题集讲义" };
+  }
+
+  const collection = await db.collection.findFirst({
+    where: { id: params.id, accountId },
+    select: { name: true },
+  });
+
+  const title = collection?.name
+    ? titleForPdfFilename(collection.name)
+    : "题集讲义";
+
+  return { title };
+}
 
 export default async function PrintPage({
   params,
