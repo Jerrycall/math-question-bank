@@ -238,6 +238,12 @@ function sanitizeGgbCommandLine(line: string): string {
     'Text($1, $2)'
   );
 
+  // GeoGebra 中笛卡尔点建议写成 A=(x,y)，避免 Point(x,y) 语法不兼容
+  s = s.replace(
+    /^([A-Za-z][A-Za-z0-9_]*)\s*=\s*Point\(\s*([^,]+)\s*,\s*([^)]+)\s*\)\s*$/i,
+    "$1=($2,$3)"
+  );
+
   // 至少应像命令：包含 "(" 且以 ")" 结尾，或是 a = ...
   const looksLikeCommand =
     (s.includes("(") && s.endsWith(")")) || /^[A-Za-z][A-Za-z0-9_]*\s*=/.test(s);
@@ -279,7 +285,8 @@ export async function generateGgbCommands(
 8) 不要输出任何英文说明行；严禁输出诸如 "The commands are ..." 这类描述句。
 9) 尽量不要使用 Text 命令；如必须使用，只允许 Text("标签", 点对象) 两参数形式。
 10) commands 必须自包含：所有符号在使用前先定义，不依赖外部已存在对象。
-11) 若使用函数，先定义如 f(x)=...，调用时写 f(1)；不要把未定义符号直接当坐标（如 Point(f,1)）。`,
+11) 若使用函数，先定义如 f(x)=...，调用时写 f(1)；不要把未定义符号直接当坐标（如 Point(f,1)）。
+12) 创建坐标点时不要使用 Point(x,y)；统一使用赋值坐标形式，如 A=(1,0)、M=(2*sqrt(2)/3,-1/3)。`,
       },
       {
         role: "user",
