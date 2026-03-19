@@ -201,11 +201,34 @@ const GgbCommandSchema = z.object({
 
 export type GgbCommandResult = z.infer<typeof GgbCommandSchema>;
 
+type GgbGenerateContext = {
+  answer?: string;
+  analysis?: string;
+  tags?: string[];
+};
+
+function normalizeGgbCommandLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^[-*]\s+/, "")
+    .replace(/^\d+[\.\)]\s+/, "")
+    .replace(/^`|`$/g, "");
+}
+
 export async function generateGgbCommands(
   questionText: string,
-  userIntent?: string
+  userIntent?: string,
+  context?: GgbGenerateContext
 ): Promise<GgbCommandResult> {
   const openai = getChatClient();
+  const extraContext = [
+    context?.answer?.trim() ? `参考答案：\n${context.answer.trim()}` : "",
+    context?.analysis?.trim() ? `参考解析：\n${context.analysis.trim()}` : "",
+    context?.tags?.length ? `标签：${context.tags.join("、")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
   const response = await openai.chat.completions.create({
     model: getChatModel(),
     response_format: { type: "json_object" },
@@ -217,17 +240,20 @@ export async function generateGgbCommands(
 输出要求（严格）：
 1) 仅输出一个 JSON 对象，键为 commands、summary、notes。
 2) commands 中每一项必须是单行 GeoGebra 命令（不要解释文字、不要 markdown 代码块）。
-3) 命令优先使用点、线、圆锥曲线、函数、交点、距离、斜率等基础对象，兼容 GeoGebra Classic 输入栏。
-4) 如果题目信息不足，先生成通用可运行骨架命令，并在 notes 说明还需补充的条件。`,
+3) 命令必须可直接在 GeoGebra Classic 输入栏执行，避免自然语言、伪代码、中文标点。
+4) 按“先定义基础对象，再构造目标对象，最后标注关键量”的顺序输出。
+5) 优先使用这些可执行语法：Point / Line / Segment / Circle / Ellipse / Hyperbola / Parabola / Intersect / Distance / Midpoint / Slope / Function。
+6) 如果题目信息不足，先生成通用可运行骨架命令，并在 notes 说明还需补充的条件。
+7) 至少返回 3 条命令；命令总数不超过 20 条。`,
       },
       {
         role: "user",
         content: `题目内容：\n${questionText}\n\n作图需求（可选）：\n${
           userIntent?.trim() || "按题意给出标准作图命令"
-        }\n\n请返回 JSON。`,
+        }${extraContext ? `\n\n补充上下文：\n${extraContext}` : ""}\n\n请返回 JSON。`,
       },
     ],
-    temperature: 0.2,
+    temperature: 0.1,
     max_tokens: 4096,
   });
 
@@ -241,7 +267,16 @@ export async function generateGgbCommands(
       .join("; ");
     throw new Error(`GGB 命令格式校验失败：${issues || result.error.message}`);
   }
-  return result.data;
+  const normalizedCommands = result.data.commands
+    .map(normalizeGgbCommandLine)
+    .filter(Boolean);
+  if (normalizedCommands.length === 0) {
+    throw new Error("GGB 命令为空，请重试。");
+  }
+  return {
+    ...result.data,
+    commands: normalizedCommands,
+  };
 }
 
 export async function explainQuestion(

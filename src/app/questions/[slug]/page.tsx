@@ -140,6 +140,9 @@ export default function QuestionDetailPage() {
         body: JSON.stringify({
           text: question.content,
           intent: ggbIntent,
+          answer: question.answer,
+          analysis: question.analysis,
+          tags: (question.tags ?? []).map((t) => t.tag.name),
         }),
       });
       const raw = await res.text();

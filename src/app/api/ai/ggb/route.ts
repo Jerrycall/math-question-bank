@@ -5,7 +5,13 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  let body: { text?: string; intent?: string };
+  let body: {
+    text?: string;
+    intent?: string;
+    answer?: string;
+    analysis?: string;
+    tags?: string[];
+  };
   try {
     body = await request.json();
   } catch {
@@ -20,7 +26,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await generateGgbCommands(text, intent);
+    const result = await generateGgbCommands(text, intent, {
+      answer: body.answer,
+      analysis: body.analysis,
+      tags: Array.isArray(body.tags) ? body.tags : [],
+    });
     return NextResponse.json(result);
   } catch (error) {
     const message =
