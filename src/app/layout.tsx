@@ -42,7 +42,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <div className="min-h-screen flex flex-col">
           {/* 顶部导航 */}
-          <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
+          <header className="app-site-header sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
               <Link href="/" className="flex items-center gap-2.5 font-bold text-lg">
                 <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
@@ -77,7 +77,7 @@ export default function RootLayout({
           </main>
 
           {/* 底部 */}
-          <footer className="border-t border-border py-4 text-center text-xs text-muted-foreground">
+          <footer className="app-site-footer border-t border-border py-4 text-center text-xs text-muted-foreground">
             高中数学题库学习系统 · 知识图谱 + AI辅助 + 间隔复习
           </footer>
         </div>
