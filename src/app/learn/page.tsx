@@ -1,10 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { Brain, Wand2, Loader2, Plus, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  Brain,
+  Wand2,
+  Loader2,
+  Plus,
+  CheckCircle,
+  AlertCircle,
+  Copy,
+  Check,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
 import { TAG_TYPE_LABELS, TAG_TYPE_COLORS } from "@/types";
@@ -19,6 +27,12 @@ interface StructuredResult {
   answer: string;
   errorProne: string;
   variantDirection: string;
+}
+
+interface GgbResult {
+  commands: string[];
+  summary?: string;
+  notes?: string[];
 }
 
 /** fetch 在未收到完整 HTTP 响应就失败时（非 4xx/5xx JSON），浏览器常报 Failed to fetch */
@@ -133,10 +147,14 @@ async function parseSseStructurizePayload(res: Response): Promise<StructurizePay
 
 export default function LearnPage() {
   const [rawText, setRawText] = useState("");
+  const [ggbIntent, setGgbIntent] = useState("");
   const [structured, setStructured] = useState<StructuredResult | null>(null);
+  const [ggbResult, setGgbResult] = useState<GgbResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ggbLoading, setGgbLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
   const handleStructurize = async () => {
@@ -201,6 +219,63 @@ export default function LearnPage() {
       setError(`保存失败：${fetchErrorHint(e)}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleGenerateGgb = async () => {
+    if (!rawText.trim()) return;
+    setGgbLoading(true);
+    setError("");
+    setGgbResult(null);
+
+    try {
+      const res = await fetch(
+        "/api/ai/ggb",
+        structurizeFetchInit({ text: rawText, intent: ggbIntent })
+      );
+      const raw = await res.text();
+      let data: { error?: string; commands?: string[]; summary?: string; notes?: string[] } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        setError(
+          res.ok
+            ? "GGB 返回格式异常，请稍后重试。"
+            : `GGB 请求失败（${res.status}）`
+        );
+        return;
+      }
+
+      if (!res.ok || data.error) {
+        setError(data.error || `GGB 请求失败（${res.status}）`);
+        return;
+      }
+      if (!data.commands || data.commands.length === 0) {
+        setError("未返回作图命令，请重试。");
+        return;
+      }
+      setGgbResult({
+        commands: data.commands,
+        summary: data.summary,
+        notes: data.notes ?? [],
+      });
+      setCopied(false);
+    } catch (e) {
+      setError(`GGB 生成失败：${fetchErrorHint(e)}`);
+    } finally {
+      setGgbLoading(false);
+    }
+  };
+
+  const handleCopyGgb = async () => {
+    if (!ggbResult?.commands?.length) return;
+    const text = ggbResult.commands.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError("复制失败，请手动选中命令复制。");
     }
   };
 
@@ -373,6 +448,74 @@ AI 将自动：
         </Card>
       )}
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-primary" />
+            GGB 作图命令生成
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <input
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            placeholder="可选：补充作图目标，例如“画出轨迹并标注最短距离”"
+            value={ggbIntent}
+            onChange={(e) => setGgbIntent(e.target.value)}
+          />
+          <Button
+            onClick={handleGenerateGgb}
+            disabled={ggbLoading || !rawText.trim()}
+            className="w-full"
+            variant="secondary"
+          >
+            {ggbLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                生成 GGB 命令中...
+              </>
+            ) : (
+              <>
+                <Wand2 className="h-4 w-4 mr-2" />
+                生成 GeoGebra 命令
+              </>
+            )}
+          </Button>
+
+          {ggbResult && (
+            <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+              {ggbResult.summary && (
+                <p className="text-xs text-muted-foreground">{ggbResult.summary}</p>
+              )}
+              <pre className="text-xs whitespace-pre-wrap rounded-md bg-background border p-3 max-h-72 overflow-auto">
+{ggbResult.commands.join("\n")}
+              </pre>
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={handleCopyGgb}>
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-1" />
+                      已复制
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4 mr-1" />
+                      复制命令
+                    </>
+                  )}
+                </Button>
+              </div>
+              {ggbResult.notes && ggbResult.notes.length > 0 && (
+                <div className="text-xs text-amber-700 space-y-1">
+                  {ggbResult.notes.map((n, i) => (
+                    <p key={`${n}-${i}`}>- {n}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* 快速导入说明 */}
       <Card className="bg-muted/40">
         <CardContent className="p-4 space-y-2">
@@ -382,6 +525,7 @@ AI 将自动：
             <p>2. 点击「AI 结构化分析」，自动提取知识点、生成解析</p>
             <p>3. 确认结果后点击「保存到题库」，系统自动建立知识关联</p>
             <p>4. 保存后可在题库、知识图谱中查看，并自动加入复习计划</p>
+            <p>5. 若需作图，点「生成 GeoGebra 命令」并粘贴到 GGB 输入栏执行</p>
           </div>
           <div className="flex items-start gap-1.5 text-xs text-amber-600 mt-2">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />

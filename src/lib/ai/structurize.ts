@@ -165,6 +165,69 @@ ${originalAnalysis}
   return VariantSchema.parse(parsed);
 }
 
+const GgbCommandSchema = z.object({
+  commands: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(20)
+    .describe("GeoGebra 命令行列表，每行一个可直接粘贴到输入栏的命令"),
+  summary: z
+    .string()
+    .optional()
+    .default("")
+    .describe("简要说明作图思路与命令执行顺序"),
+  notes: z
+    .array(z.string())
+    .optional()
+    .default([])
+    .describe("可选注意事项，如参数范围、坐标窗口设置"),
+});
+
+export type GgbCommandResult = z.infer<typeof GgbCommandSchema>;
+
+export async function generateGgbCommands(
+  questionText: string,
+  userIntent?: string
+): Promise<GgbCommandResult> {
+  const openai = getChatClient();
+  const response = await openai.chat.completions.create({
+    model: getChatModel(),
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `你是一位 GeoGebra 作图助手，帮助高中数学题生成可执行命令。
+
+输出要求（严格）：
+1) 仅输出一个 JSON 对象，键为 commands、summary、notes。
+2) commands 中每一项必须是单行 GeoGebra 命令（不要解释文字、不要 markdown 代码块）。
+3) 命令优先使用点、线、圆锥曲线、函数、交点、距离、斜率等基础对象，兼容 GeoGebra Classic 输入栏。
+4) 如果题目信息不足，先生成通用可运行骨架命令，并在 notes 说明还需补充的条件。`,
+      },
+      {
+        role: "user",
+        content: `题目内容：\n${questionText}\n\n作图需求（可选）：\n${
+          userIntent?.trim() || "按题意给出标准作图命令"
+        }\n\n请返回 JSON。`,
+      },
+    ],
+    temperature: 0.2,
+    max_tokens: 4096,
+  });
+
+  const jsonStr = response.choices[0]?.message?.content ?? "";
+  const parsed = parseJsonObjectFromModelContent(jsonStr);
+  const result = GgbCommandSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues
+      .slice(0, 6)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    throw new Error(`GGB 命令格式校验失败：${issues || result.error.message}`);
+  }
+  return result.data;
+}
+
 export async function explainQuestion(
   question: string,
   analysis: string,

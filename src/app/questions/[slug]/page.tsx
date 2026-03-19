@@ -10,6 +10,9 @@ import {
   Loader2,
   RefreshCw,
   Network,
+  Wand2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { QuestionCard } from "@/components/QuestionCard";
 import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
+import { GeoGebraPreview } from "@/components/GeoGebraPreview";
 import {
   Question,
   TAG_TYPE_COLORS,
@@ -33,6 +37,13 @@ export default function QuestionDetailPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [ggbIntent, setGgbIntent] = useState("");
+  const [ggbCommands, setGgbCommands] = useState<string[]>([]);
+  const [ggbSummary, setGgbSummary] = useState("");
+  const [ggbNotes, setGgbNotes] = useState<string[]>([]);
+  const [ggbLoading, setGgbLoading] = useState(false);
+  const [ggbError, setGgbError] = useState("");
+  const [ggbCopied, setGgbCopied] = useState(false);
 
   useEffect(() => {
     fetch(`/api/questions/${slug}`)
@@ -110,6 +121,63 @@ export default function QuestionDetailPage() {
       setVariants([]);
     } finally {
       setVariantsLoading(false);
+    }
+  };
+
+  const handleGenerateGgb = async () => {
+    if (!question?.content?.trim()) return;
+    setGgbLoading(true);
+    setGgbError("");
+    setGgbCommands([]);
+    setGgbSummary("");
+    setGgbNotes([]);
+    setGgbCopied(false);
+
+    try {
+      const res = await fetch("/api/ai/ggb", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: question.content,
+          intent: ggbIntent,
+        }),
+      });
+      const raw = await res.text();
+      let data: { error?: string; commands?: string[]; summary?: string; notes?: string[] } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        setGgbError(
+          res.ok ? "GGB 返回格式异常，请重试。" : `GGB 请求失败（${res.status}）`
+        );
+        return;
+      }
+      if (!res.ok || data.error) {
+        setGgbError(data.error || `GGB 请求失败（${res.status}）`);
+        return;
+      }
+      if (!data.commands || data.commands.length === 0) {
+        setGgbError("未返回作图命令，请重试。");
+        return;
+      }
+      setGgbCommands(data.commands);
+      setGgbSummary(data.summary ?? "");
+      setGgbNotes(data.notes ?? []);
+    } catch {
+      setGgbError("GGB 生成失败，请检查网络与 AI 配置。");
+    } finally {
+      setGgbLoading(false);
+    }
+  };
+
+  const handleCopyGgb = async () => {
+    if (ggbCommands.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(ggbCommands.join("\n"));
+      setGgbCopied(true);
+      setTimeout(() => setGgbCopied(false), 1500);
+    } catch {
+      setGgbError("复制失败，请手动复制命令。");
     }
   };
 
@@ -208,6 +276,81 @@ export default function QuestionDetailPage() {
           {aiResponse && (
             <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
               <MathRenderer content={aiResponse} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* GGB 作图 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-primary" />
+            GeoGebra 作图
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            placeholder="可选：补充作图目标，如“标出关键交点并显示最短距离”"
+            value={ggbIntent}
+            onChange={(e) => setGgbIntent(e.target.value)}
+          />
+          <Button
+            onClick={handleGenerateGgb}
+            disabled={ggbLoading}
+            variant="secondary"
+            className="w-full"
+          >
+            {ggbLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                生成命令中...
+              </>
+            ) : (
+              <>
+                <Wand2 className="h-4 w-4 mr-2" />
+                生成 GGB 命令
+              </>
+            )}
+          </Button>
+
+          {ggbError && (
+            <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/20 rounded p-2">
+              {ggbError}
+            </p>
+          )}
+
+          {ggbCommands.length > 0 && (
+            <div className="space-y-3">
+              {ggbSummary && (
+                <p className="text-xs text-muted-foreground">{ggbSummary}</p>
+              )}
+              <pre className="text-xs whitespace-pre-wrap rounded-md bg-background border p-3 max-h-64 overflow-auto">
+{ggbCommands.join("\n")}
+              </pre>
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={handleCopyGgb}>
+                  {ggbCopied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-1" />
+                      已复制
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4 mr-1" />
+                      复制命令
+                    </>
+                  )}
+                </Button>
+              </div>
+              {ggbNotes.length > 0 && (
+                <div className="text-xs text-amber-700 space-y-1">
+                  {ggbNotes.map((n, i) => (
+                    <p key={`${n}-${i}`}>- {n}</p>
+                  ))}
+                </div>
+              )}
+              <GeoGebraPreview commands={ggbCommands} />
             </div>
           )}
         </CardContent>
