@@ -6,16 +6,56 @@ import {
   getEmbeddingModel,
 } from "./client";
 
+/** 模型有时包在 ```json ``` 里或前后带说明文字，从中取出可 JSON.parse 的对象 */
+function parseJsonObjectFromModelContent(content: string): unknown {
+  let s = content.trim();
+  if (!s) throw new Error("模型返回内容为空");
+
+  const fence =
+    /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/m.exec(s) ??
+    /```(?:json)?\s*([\s\S]*?)```/.exec(s);
+  if (fence) s = fence[1].trim();
+
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(
+      `无法从模型输出中解析 JSON（开头片段）：${s.slice(0, 240).replace(/\s+/g, " ")}`
+    );
+  }
+  const slice = s.slice(start, end + 1);
+  try {
+    return JSON.parse(slice);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`JSON 解析失败：${msg}`);
+  }
+}
+
+const stringOrStringArray = z
+  .union([z.array(z.string()), z.string()])
+  .transform((v) =>
+    Array.isArray(v) ? v : typeof v === "string" && v.trim() ? [v.trim()] : []
+  );
+
+const difficultySchema = z
+  .union([z.number(), z.string()])
+  .transform((v) => {
+    const n = typeof v === "number" ? v : parseInt(String(v).trim(), 10);
+    if (!Number.isFinite(n) || n < 1 || n > 5) return 3;
+    return n;
+  });
+
 const StructuredQuestionSchema = z.object({
-  title: z.string().describe("题目标题，简洁描述考查内容"),
-  knowledge: z.array(z.string()).describe("涉及的知识点，如：导数、单调性、函数"),
-  method: z.array(z.string()).describe("解题方法，如：导数法、分类讨论、配方法"),
-  thought: z.array(z.string()).describe("数学思想，如：函数思想、转化思想、数形结合"),
-  difficulty: z.number().min(1).max(5).describe("难度评分 1-5"),
+  title: z.string().min(1).describe("题目标题，简洁描述考查内容"),
+  knowledge: stringOrStringArray.describe("涉及的知识点"),
+  method: stringOrStringArray.describe("解题方法"),
+  thought: stringOrStringArray.describe("数学思想"),
+  difficulty: difficultySchema.describe("难度评分 1-5"),
   analysis: z.string().describe("详细解析，分步骤，支持 LaTeX 公式"),
   answer: z.string().describe("标准答案"),
-  errorProne: z.string().describe("易错点提示"),
-  variantDirection: z.string().describe("变式方向提示"),
+  errorProne: z.string().optional().default("").describe("易错点提示"),
+  variantDirection: z.string().optional().default("").describe("变式方向提示"),
 });
 
 export type StructuredQuestion = z.infer<typeof StructuredQuestionSchema>;
@@ -43,7 +83,9 @@ const SYSTEM_PROMPT = `你是一位专业的高中数学教师，擅长分析数
 - 数形结合思想、分类讨论思想、化归思想
 - 极限思想、优化思想
 
-请严格按照 JSON 格式输出，LaTeX 公式使用 $ 包裹行内公式，$$ 包裹块级公式。`;
+请严格按照 JSON 格式输出（json_object 模式），LaTeX 公式使用 $ 包裹行内公式，$$ 包裹块级公式。
+
+你必须输出**仅一个** JSON 对象，包含且仅包含这些键：title, knowledge, method, thought, difficulty, analysis, answer, errorProne, variantDirection。其中 knowledge、method、thought 为字符串数组；difficulty 为 1-5 的整数。不要 markdown 代码块包裹。`;
 
 export async function structurizeQuestion(
   rawText: string
@@ -56,15 +98,24 @@ export async function structurizeQuestion(
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `请分析以下高中数学题目，提取结构化信息并生成详细解析：\n\n${rawText}`,
+        content: `请分析以下高中数学题目，提取结构化信息并生成详细解析（输出上述 JSON 对象）：\n\n${rawText}`,
       },
     ],
     temperature: 0.2,
+    max_tokens: 8192,
   });
 
-  const jsonStr = response.choices[0].message.content ?? "{}";
-  const parsed = JSON.parse(jsonStr);
-  return StructuredQuestionSchema.parse(parsed);
+  const jsonStr = response.choices[0]?.message?.content ?? "";
+  const parsed = parseJsonObjectFromModelContent(jsonStr);
+  const result = StructuredQuestionSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues
+      .slice(0, 6)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    throw new Error(`结构化字段校验失败：${issues || result.error.message}`);
+  }
+  return result.data;
 }
 
 const VariantSchema = z.object({
@@ -102,14 +153,15 @@ ${originalQuestion}
 ## 原解析
 ${originalAnalysis}
 
-请输出 JSON 格式，包含 variants 数组。`,
+请输出 JSON 格式，包含 variants 数组（json_object，键为 variants）。`,
       },
     ],
     temperature: 0.7,
+    max_tokens: 8192,
   });
 
-  const jsonStr = response.choices[0].message.content ?? "{}";
-  const parsed = JSON.parse(jsonStr);
+  const jsonStr = response.choices[0]?.message?.content ?? "";
+  const parsed = parseJsonObjectFromModelContent(jsonStr);
   return VariantSchema.parse(parsed);
 }
 
