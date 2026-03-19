@@ -519,7 +519,7 @@ export async function generateGgbCommands(
         },
       ],
       temperature: 0.1,
-      max_tokens: 4096,
+      max_tokens: 2200,
     });
 
     const planJson = planResp.choices[0]?.message?.content ?? "";
@@ -550,12 +550,10 @@ export async function generateGgbCommands(
 
   // 1) IR 计划模式：先产对象计划，再由规则编译为命令（更稳定）
   try {
-    const first = await tryPlanCompile();
-    if (first) return first;
-    const second = await tryPlanCompile(
+    const first = await tryPlanCompile(
       `以下对象必须覆盖：${[...mustHaveParabola, ...mustHave].join(" ; ")}。且不要出现未定义符号。`
     );
-    if (second) return second;
+    if (first) return first;
   } catch {
     // 计划模式失败时回退到直接命令模式
   }
@@ -591,7 +589,7 @@ export async function generateGgbCommands(
       },
     ],
     temperature: 0.1,
-    max_tokens: 4096,
+    max_tokens: 2200,
   });
 
   const jsonStr = response.choices[0]?.message?.content ?? "";
@@ -679,7 +677,7 @@ ${errorHint?.trim() || "(无)"}\n\n请返回修复后的完整 commands。`,
       },
     ],
     temperature: 0.1,
-    max_tokens: 4096,
+    max_tokens: 2200,
   });
 
   const jsonStr = response.choices[0]?.message?.content ?? "";
