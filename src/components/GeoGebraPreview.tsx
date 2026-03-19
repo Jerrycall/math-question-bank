@@ -111,25 +111,47 @@ export function GeoGebraPreview({ commands, className }: GeoGebraPreviewProps) {
     setError("");
     try {
       const api = window[appletId] as
-        | { evalCommand?: (cmd: string) => boolean; reset?: () => void }
+        | {
+            evalCommand?: (cmd: string) => boolean;
+            reset?: () => void;
+            setErrorDialogsActive?: (active: boolean) => void;
+          }
         | undefined;
       if (!api?.evalCommand) {
         setError("GeoGebra 尚未就绪，请稍后再试。");
         return;
       }
 
+      if (typeof api.setErrorDialogsActive === "function") {
+        api.setErrorDialogsActive(false);
+      }
       if (typeof api.reset === "function") api.reset();
-      for (let i = 0; i < commands.length; i += 1) {
-        const cmd = commands[i]?.trim();
-        if (!cmd) continue;
-        // 跳过明显不是 GeoGebra 命令的说明行，避免整批执行被弹窗打断
-        if (!cmd.includes("(") && !cmd.includes("=")) continue;
-        if (/^note\s*:|^tips?\s*:|^the\s+/i.test(cmd)) continue;
-        const ok = api.evalCommand(cmd);
-        if (!ok) {
-          setError(`第 ${i + 1} 行命令执行失败：${cmd}`);
-          break;
+
+      const base = commands
+        .map((cmd, i) => ({ cmd: cmd.trim(), index: i + 1 }))
+        .filter((x) => x.cmd)
+        .filter((x) => x.cmd.includes("(") || x.cmd.includes("="))
+        .filter((x) => !/^note\s*:|^tips?\s*:|^the\s+/i.test(x.cmd));
+
+      // 允许命令存在依赖顺序问题：多轮尝试，先执行能通过的，剩余命令后续重试
+      let pending = base;
+      let progressed = true;
+      let rounds = 0;
+      while (pending.length > 0 && progressed && rounds < 6) {
+        progressed = false;
+        const next: typeof pending = [];
+        for (const item of pending) {
+          const ok = api.evalCommand(item.cmd);
+          if (ok) progressed = true;
+          else next.push(item);
         }
+        pending = next;
+        rounds += 1;
+      }
+
+      if (pending.length > 0) {
+        const first = pending[0];
+        setError(`第 ${first.index} 行命令执行失败：${first.cmd}`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "命令执行失败");
