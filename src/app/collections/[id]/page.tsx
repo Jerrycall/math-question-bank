@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, ListPlus } from "lucide-react";
 
 type CollectionQuestionResponse = {
   collection: {
@@ -158,6 +158,12 @@ export default function CollectionDetailPage() {
             导出时在每题后附答题区（稿纸线）
           </label>
           <div className="flex gap-2 flex-wrap justify-end">
+            <Link href={`/collections/new?addTo=${collectionId}`}>
+              <Button variant="default" className="gap-1.5">
+                <ListPlus className="h-4 w-4" />
+                批量加题
+              </Button>
+            </Link>
             <Link href="/collections">
               <Button variant="outline">返回题集列表</Button>
             </Link>

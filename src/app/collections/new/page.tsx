@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import React, { Suspense, useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Search, Filter, CheckSquare, Square } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,29 @@ import { TagBrowser } from "@/components/TagBrowser";
 import { Question, Tag, Difficulty, DIFFICULTY_LABELS } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 /**
- * 新建题集：先进入本题库，勾选题目后点「录入」一次性加入新题集。
+ * 新建题集，或向已有题集批量加题（URL: ?addTo=题集id）。
  */
-export default function NewCollectionPage() {
+function NewCollectionPageContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const addToIdRaw = searchParams.get("addTo")?.trim() ?? "";
+  const addToId = addToIdRaw.length > 0 ? addToIdRaw : null;
+
+  const returnToLogin = useMemo(() => {
+    const q = searchParams.toString();
+    return `${pathname || "/collections/new"}${q ? `?${q}` : ""}`;
+  }, [pathname, searchParams]);
+
   const [collectionName, setCollectionName] = useState("");
+  const [appendTarget, setAppendTarget] = useState<{ id: string; name: string } | null>(
+    null
+  );
+  const [appendLoading, setAppendLoading] = useState(false);
+  const [appendError, setAppendError] = useState<string | null>(null);
   const [orderedSelectedIds, setOrderedSelectedIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
@@ -44,7 +60,7 @@ export default function NewCollectionPage() {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (!alive) return;
       if (!res.ok) {
-        router.replace(`/login?returnTo=${encodeURIComponent("/collections/new")}`);
+        router.replace(`/login?returnTo=${encodeURIComponent(returnToLogin)}`);
         return;
       }
       setAuthChecked(true);
@@ -52,7 +68,41 @@ export default function NewCollectionPage() {
     return () => {
       alive = false;
     };
-  }, [router]);
+  }, [router, returnToLogin]);
+
+  useEffect(() => {
+    if (!authChecked || !addToId) {
+      setAppendTarget(null);
+      setAppendError(null);
+      setAppendLoading(false);
+      return;
+    }
+    let alive = true;
+    setAppendLoading(true);
+    setAppendError(null);
+    setAppendTarget(null);
+    (async () => {
+      const res = await fetch(`/api/collections/${addToId}`, {
+        credentials: "include",
+      });
+      if (!alive) return;
+      setAppendLoading(false);
+      if (!res.ok) {
+        setAppendError("找不到该题集或无权访问，请从「我的题集」重新进入。");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      const c = data?.collection;
+      if (c?.id && c?.name) {
+        setAppendTarget({ id: c.id, name: c.name });
+      } else {
+        setAppendError("加载题集信息失败");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [authChecked, addToId]);
 
   const fetchTags = useCallback(async () => {
     try {
@@ -138,6 +188,39 @@ export default function NewCollectionPage() {
   }
 
   async function submitCollection() {
+    if (orderedSelectedIds.length === 0) {
+      alert("请至少勾选一道题目");
+      return;
+    }
+
+    if (appendTarget) {
+      setSubmitting(true);
+      try {
+        const addRes = await fetch(
+          `/api/collections/${appendTarget.id}/questions`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ questionIds: orderedSelectedIds }),
+          }
+        );
+        if (!addRes.ok) {
+          const data = await addRes.json().catch(() => ({}));
+          alert(data?.error || "加入题集失败");
+          return;
+        }
+        invalidateMyCollectionsCache();
+        router.push(`/collections/${appendTarget.id}`);
+      } catch (e) {
+        console.error(e);
+        alert("网络错误，请重试");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     const name = collectionName.trim();
     if (!name) {
       alert("请填写题集名称");
@@ -145,10 +228,6 @@ export default function NewCollectionPage() {
     }
     if (name.length > 50) {
       alert("题集名称最多 50 字");
-      return;
-    }
-    if (orderedSelectedIds.length === 0) {
-      alert("请至少勾选一道题目");
       return;
     }
 
@@ -209,19 +288,56 @@ export default function NewCollectionPage() {
     );
   }
 
+  if (addToId && appendLoading) {
+    return (
+      <div className="text-sm text-muted-foreground py-12 text-center">
+        加载题集信息…
+      </div>
+    );
+  }
+
+  const appendMode = Boolean(appendTarget);
+  const appendBlocked = Boolean(addToId) && (!appendTarget || Boolean(appendError));
+
   return (
     <div className="flex flex-col gap-4">
+      {addToId && appendError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive max-w-7xl mx-auto w-full">
+          {appendError}{" "}
+          <Link href="/collections" className="underline font-medium">
+            返回我的题集
+          </Link>
+        </div>
+      )}
+
       {/* 顶部：题集名 + 录入（sticky） */}
       <div className="sticky top-14 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur border-b border-border">
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4 max-w-7xl mx-auto">
           <div className="flex-1 space-y-1.5 min-w-0">
-            <label className="text-sm font-medium">新题集名称</label>
-            <Input
-              placeholder="例如：导数专题周练"
-              value={collectionName}
-              onChange={(e) => setCollectionName(e.target.value)}
-              maxLength={50}
-            />
+            {appendTarget ? (
+              <>
+                <label className="text-sm font-medium">向已有题集添加题目</label>
+                <p className="text-sm text-muted-foreground rounded-md border border-border bg-muted/30 px-3 py-2">
+                  「<span className="font-medium text-foreground">{appendTarget.name}</span>」
+                  <Link
+                    href={`/collections/${appendTarget.id}`}
+                    className="ml-2 text-primary text-xs hover:underline"
+                  >
+                    查看题集
+                  </Link>
+                </p>
+              </>
+            ) : (
+              <>
+                <label className="text-sm font-medium">新题集名称</label>
+                <Input
+                  placeholder="例如：导数专题周练"
+                  value={collectionName}
+                  onChange={(e) => setCollectionName(e.target.value)}
+                  maxLength={50}
+                />
+              </>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Badge variant="secondary" className="text-sm font-normal">
@@ -239,15 +355,27 @@ export default function NewCollectionPage() {
             <Button
               type="button"
               size="lg"
-              disabled={submitting}
+              disabled={
+                submitting ||
+                orderedSelectedIds.length === 0 ||
+                appendBlocked
+              }
               onClick={submitCollection}
             >
-              {submitting ? "录入中…" : "录入题集"}
+              {submitting
+                ? appendTarget
+                  ? "加入中…"
+                  : "录入中…"
+                : appendTarget
+                  ? "加入此题集"
+                  : "录入题集"}
             </Button>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
-          可翻页继续勾选，已选题目会保留；录入时按勾选顺序写入题集。
+          {appendTarget
+            ? "可翻页继续勾选，已选会追加到该题集末尾（已在题集中的题目会自动跳过）。"
+            : "可翻页继续勾选，已选题目会保留；录入时按勾选顺序写入题集。"}
         </p>
       </div>
 
@@ -462,5 +590,19 @@ export default function NewCollectionPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NewCollectionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-sm text-muted-foreground py-12 text-center">
+          加载中…
+        </div>
+      }
+    >
+      <NewCollectionPageContent />
+    </Suspense>
   );
 }

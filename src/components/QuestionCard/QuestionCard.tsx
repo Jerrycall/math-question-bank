@@ -266,7 +266,14 @@ export function QuestionCard({
                           className="block text-center text-xs text-primary hover:underline"
                           onClick={() => setPickerOpen(false)}
                         >
-                          批量选题建题集 →
+                          批量选题建新题集 →
+                        </Link>
+                        <Link
+                          href="/collections"
+                          className="block text-center text-xs text-muted-foreground hover:text-primary hover:underline"
+                          onClick={() => setPickerOpen(false)}
+                        >
+                          向已有题集批量加题（进题集点「批量加题」）→
                         </Link>
                       </div>
                     </div>

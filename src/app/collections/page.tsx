@@ -69,9 +69,9 @@ export default function CollectionsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {collections.map((c) => (
-          <Link key={c.id} href={`/collections/${c.id}`}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader className="pb-3">
+          <Card key={c.id} className="hover:shadow-md transition-shadow">
+            <CardHeader className="pb-3">
+              <Link href={`/collections/${c.id}`} className="block">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="font-semibold line-clamp-1">{c.name}</div>
@@ -83,14 +83,21 @@ export default function CollectionsPage() {
                     {c._count?.questions ?? 0} 题
                   </Badge>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-sm text-muted-foreground">
-                  点击进入查看题目并导出 PDF
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+              </Link>
+            </CardHeader>
+            <CardContent className="pt-0 flex flex-wrap gap-2">
+              <Link href={`/collections/${c.id}`}>
+                <Button variant="secondary" size="sm">
+                  查看 / 导出 PDF
+                </Button>
+              </Link>
+              <Link href={`/collections/new?addTo=${c.id}`}>
+                <Button variant="outline" size="sm">
+                  批量加题
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         ))}
       </div>
     </div>

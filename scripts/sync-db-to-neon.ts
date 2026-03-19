@@ -9,6 +9,10 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import {
+  mergeTargetTagIdIntoCanonical,
+  prepareTagUpsertConflictsOnTarget,
+} from "./tag-slug-merge-on-target";
 
 const TARGET_URL = process.env.TARGET_DATABASE_URL;
 if (!TARGET_URL?.trim()) {
@@ -65,6 +69,7 @@ async function main() {
 
   const tagOrder = sortTagsParentFirst(tags);
   for (const tag of tagOrder) {
+    const mergeFromIds = await prepareTagUpsertConflictsOnTarget(targetDb, tag);
     await targetDb.tag.upsert({
       where: { id: tag.id },
       create: {
@@ -86,6 +91,9 @@ async function main() {
         sortOrder: tag.sortOrder,
       },
     });
+    for (const mergeFromId of mergeFromIds) {
+      await mergeTargetTagIdIntoCanonical(targetDb, mergeFromId, tag.id);
+    }
   }
   console.log(`  ✅ 标签: ${tags.length}`);
 

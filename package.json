@@ -19,7 +19,8 @@
     "fix-imported-images": "ts-node --project tsconfig.scripts.json scripts/fix-imported-images.ts",
     "题目库:导入+图片": "npm run import-shanghai && npm run fix-imported-images",
     "seed-knowledge": "ts-node --project tsconfig.scripts.json scripts/seed-knowledge-structure.ts",
-    "sync-db": "ts-node --project tsconfig.scripts.json scripts/sync-db-to-neon.ts"
+    "sync-db": "ts-node --project tsconfig.scripts.json scripts/sync-db-to-neon.ts",
+    "sync-db:incremental": "ts-node --project tsconfig.scripts.json scripts/sync-db-to-neon-incremental.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.16.0",

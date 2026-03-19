@@ -37,11 +37,18 @@ export async function POST(
       return NextResponse.json({ error: "未提供题目" }, { status: 400 });
     }
 
+    const maxRow = await db.collectionQuestion.findFirst({
+      where: { collectionId },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true },
+    });
+    const sortBase = (maxRow?.sortOrder ?? -1) + 1;
+
     await db.collectionQuestion.createMany({
       data: uniqueIds.map((questionId, idx) => ({
         collectionId,
         questionId,
-        sortOrder: idx,
+        sortOrder: sortBase + idx,
       })),
       skipDuplicates: true,
     });

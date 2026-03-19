@@ -1,7 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "target": "ES2018",
+    "downlevelIteration": true,
     "module": "commonjs",
+    "moduleResolution": "node",
     "noEmit": false,
     "outDir": "dist-scripts"
   },
