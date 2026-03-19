@@ -21,11 +21,12 @@
   box-sizing: border-box;
 }
 
-/* 文档头 */
+/* 文档头：题集名称居中 */
 .docHeader {
   margin-bottom: 28px;
   padding-bottom: 20px;
   border-bottom: 3px solid var(--print-accent);
+  text-align: center;
 }
 
 .docTitle {
@@ -34,13 +35,14 @@
   letter-spacing: -0.02em;
   line-height: 1.25;
   color: var(--print-ink);
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
 
 .docSubtitle {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px 16px;
   font-size: 0.8125rem;
   color: var(--print-muted);

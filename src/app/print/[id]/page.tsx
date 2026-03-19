@@ -57,13 +57,6 @@ export default async function PrintPage({
     pageBreakBefore: cq.pageBreakBefore,
     ...cq.question,
   }));
-  const printedAt = new Date().toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
   return (
     <div className={styles.page}>
@@ -79,7 +72,6 @@ export default async function PrintPage({
             {showAnswers ? "题目 + 答案 + 解析" : "仅题目（无答案）"}
           </span>
           <span>共 {rows.length} 题</span>
-          <span>生成时间 {printedAt}</span>
           {showAnswerSpace ? (
             <span className={styles.docBadge}>含手写答题区</span>
           ) : null}
