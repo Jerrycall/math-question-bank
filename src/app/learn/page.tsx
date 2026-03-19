@@ -21,6 +21,46 @@ interface StructuredResult {
   variantDirection: string;
 }
 
+/** fetch 在未收到完整 HTTP 响应就失败时（非 4xx/5xx JSON），浏览器常报 Failed to fetch */
+function fetchErrorHint(e: unknown): string {
+  if (e instanceof DOMException && e.name === "AbortError") {
+    return "等待超过 2 分钟已中止。结构化分析较慢时可缩短题目或稍后重试。";
+  }
+  const raw = e instanceof Error ? e.message : String(e);
+  const m = raw.trim();
+  const lower = m.toLowerCase();
+  const looksLikeNetworkDrop =
+    !m ||
+    lower === "failed to fetch" ||
+    lower.includes("load failed") ||
+    lower.includes("networkerror") ||
+    lower.includes("network request failed");
+
+  if (looksLikeNetworkDrop) {
+    return [
+      "无法完成请求（连接在收到服务器响应前中断）。",
+      "常见原因：① AI 接口较慢导致服务端超时或网关断开；② 当前网络/代理不稳定；③ 广告拦截、隐私类扩展误拦了接口。",
+      "建议：换网络或暂时关闭相关插件后重试；在 Vercel 打开该次 Deployment 的 Functions / Logs 查看是否超时或报错。",
+    ].join("");
+  }
+  return m || "网络错误，请检查连接后重试。";
+}
+
+function structurizeFetchInit(body: object): RequestInit {
+  const init: RequestInit = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+  const AS = typeof AbortSignal !== "undefined" ? AbortSignal : null;
+  const timeoutFn =
+    AS && "timeout" in AS && typeof (AS as { timeout?: (ms: number) => AbortSignal }).timeout === "function"
+      ? (AS as { timeout: (ms: number) => AbortSignal }).timeout
+      : null;
+  if (timeoutFn) init.signal = timeoutFn(120_000);
+  return init;
+}
+
 export default function LearnPage() {
   const [rawText, setRawText] = useState("");
   const [structured, setStructured] = useState<StructuredResult | null>(null);
@@ -37,11 +77,10 @@ export default function LearnPage() {
     setSaved(false);
 
     try {
-      const res = await fetch("/api/ai/structurize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: rawText }),
-      });
+      const res = await fetch(
+        "/api/ai/structurize",
+        structurizeFetchInit({ text: rawText })
+      );
       const raw = await res.text();
       let data: { error?: string; structured?: StructuredResult } = {};
       try {
@@ -63,8 +102,8 @@ export default function LearnPage() {
       } else {
         setError("未返回结构化结果，请重试。");
       }
-    } catch {
-      setError("网络错误，请检查连接后重试。");
+    } catch (e) {
+      setError(fetchErrorHint(e));
     } finally {
       setLoading(false);
     }
@@ -74,11 +113,10 @@ export default function LearnPage() {
     if (!rawText.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/ai/structurize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: rawText, save: true }),
-      });
+      const res = await fetch(
+        "/api/ai/structurize",
+        structurizeFetchInit({ text: rawText, save: true })
+      );
       const raw = await res.text();
       let data: { error?: string; questionId?: string } = {};
       try {
@@ -99,8 +137,8 @@ export default function LearnPage() {
       } else {
         setError("保存失败：未返回题目 ID。");
       }
-    } catch {
-      setError("保存失败：网络错误");
+    } catch (e) {
+      setError(`保存失败：${fetchErrorHint(e)}`);
     } finally {
       setSaving(false);
     }
