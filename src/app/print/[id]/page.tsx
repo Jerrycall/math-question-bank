@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
+import { DIFFICULTY_LABELS, type Difficulty } from "@/types";
 import { PrintButton } from "./PrintButton";
 import styles from "./print.module.css";
 
@@ -51,6 +52,13 @@ export default async function PrintPage({
   if (!collection || collection.accountId !== accountId) return notFound();
 
   const questions = collection.questions.map((cq) => cq.question);
+  const printedAt = new Date().toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   return (
     <div className={styles.page}>
@@ -58,37 +66,62 @@ export default async function PrintPage({
         <PrintButton />
       </div>
 
-      <div className={styles.title}>
-        {collection.name} 题集讲义
-      </div>
-      <div className={styles.meta}>
-        {showAnswers ? "含答案与解析" : "只含题目"} · 共 {questions.length} 道题
-      </div>
+      <header className={styles.docHeader}>
+        <h1 className={styles.docTitle}>{collection.name}</h1>
+        <div className={styles.docSubtitle}>
+          <span className={styles.docBadge}>题集讲义</span>
+          <span className={showAnswers ? styles.docBadgeStrong : styles.docBadge}>
+            {showAnswers ? "题目 + 答案 + 解析" : "仅题目（无答案）"}
+          </span>
+          <span>共 {questions.length} 题</span>
+          <span>生成时间 {printedAt}</span>
+        </div>
+      </header>
 
-      <div className="space-y-6">
-        {questions.map((q, idx) => (
-          <div key={q.id} className={styles.question}>
-            <div className={styles.questionHead}>
-              {idx + 1}. {q.title}
-            </div>
+      <div className={styles.qList}>
+        {questions.map((q, idx) => {
+          const diffLabel =
+            DIFFICULTY_LABELS[q.difficulty as Difficulty] ?? String(q.difficulty);
+          return (
+            <article key={q.id} className={styles.qBlock}>
+              <div className={styles.qHead}>
+                <div className={styles.qNum} aria-hidden>
+                  {idx + 1}
+                </div>
+                <div className={styles.qHeadText}>
+                  <h2 className={styles.qTitle}>{q.title}</h2>
+                  <div className={styles.qMeta}>
+                    <span>难度：{diffLabel}</span>
+                    {q.source ? <span>来源：{q.source}</span> : null}
+                  </div>
+                </div>
+              </div>
 
-            <MathRenderer content={q.content} />
+              <div className={styles.qStem}>
+                <MathRenderer content={q.content} />
+              </div>
 
-            {showAnswers && (
-              <>
-                <div className={styles.divider} />
-                <div className={styles.questionHead}>标准答案</div>
-                <MathRenderer content={q.answer} />
+              {showAnswers && (
+                <>
+                  <div className={styles.answerBox}>
+                    <div className={styles.boxLabel}>标准答案</div>
+                    <div className={styles.boxBody}>
+                      <MathRenderer content={q.answer} />
+                    </div>
+                  </div>
 
-                <div className={styles.divider} />
-                <div className={styles.questionHead}>详细解析</div>
-                <MathRenderer content={q.analysis} />
-              </>
-            )}
-          </div>
-        ))}
+                  <div className={styles.analysisBox}>
+                    <div className={styles.boxLabel}>详细解析</div>
+                    <div className={styles.boxBody}>
+                      <MathRenderer content={q.analysis || "（暂无解析）"} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </article>
+          );
+        })}
       </div>
     </div>
   );
 }
-

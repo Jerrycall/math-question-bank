@@ -1,57 +1,247 @@
+/* A4 讲义：屏幕预览与打印/PDF 导出统一 */
+
 .page {
-  width: 210mm;
+  --print-ink: #0f172a;
+  --print-muted: #64748b;
+  --print-border: #e2e8f0;
+  --print-accent: #1e40af;
+  --print-answer: #047857;
+  --print-analysis: #1d4ed8;
+  --print-paper: #ffffff;
+  --print-subtle: #f8fafc;
+
+  width: 100%;
+  max-width: 190mm;
   margin: 0 auto;
-  padding: 24px 10mm 40px;
+  padding: 28px 6mm 48px;
+  background: var(--print-paper);
+  color: var(--print-ink);
+  font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.55;
+  box-sizing: border-box;
 }
 
-.title {
-  font-size: 18px;
+/* 文档头 */
+.docHeader {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 3px solid var(--print-accent);
+}
+
+.docTitle {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--print-ink);
+  margin: 0 0 10px;
+}
+
+.docSubtitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: 0.8125rem;
+  color: var(--print-muted);
+}
+
+.docBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  border: 1px solid var(--print-border);
+  background: var(--print-subtle);
+  color: var(--print-ink);
+}
+
+.docBadgeStrong {
+  composes: docBadge;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+/* 题目块：尽量不分页拆开 */
+.qList {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.qBlock {
+  border: 1px solid var(--print-border);
+  border-radius: 10px;
+  padding: 16px 18px 18px;
+  background: var(--print-paper);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.qHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.qNum {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.qHeadText {
+  flex: 1;
+  min-width: 0;
+}
+
+.qTitle {
+  font-size: 0.9375rem;
   font-weight: 700;
+  line-height: 1.45;
+  color: var(--print-ink);
+  margin: 0 0 6px;
+}
+
+.qMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 0.6875rem;
+  color: var(--print-muted);
+  text-transform: none;
+}
+
+.qMeta span {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 题干 Markdown / 公式 */
+.qStem {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: #334155;
+}
+
+.qStem :global(.prose) {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.qStem :global(.prose p) {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.qStem :global(.prose p:first-child) {
+  margin-top: 0;
+}
+
+.qStem :global(.prose img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* 答案 / 解析区块 */
+.answerBox,
+.analysisBox {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--print-border);
+}
+
+.answerBox {
+  border-left: 4px solid var(--print-answer);
+  background: #f0fdf4;
+}
+
+.analysisBox {
+  border-left: 4px solid var(--print-analysis);
+  background: #eff6ff;
+}
+
+.boxLabel {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--print-answer);
   margin-bottom: 8px;
 }
 
-.meta {
-  color: #6b7280;
-  font-size: 12px;
-  margin-bottom: 18px;
+.analysisBox .boxLabel {
+  color: var(--print-analysis);
+}
+
+.boxBody {
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: #1e293b;
+}
+
+.boxBody :global(.prose) {
+  font-size: inherit;
 }
 
 .printButton {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
-.question {
-  margin-bottom: 22px;
-}
-
-.questionHead {
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-
-.divider {
-  height: 1px;
-  background: rgba(107, 114, 128, 0.35);
-  margin: 14px 0;
-}
-
+/* ——— 打印 / 导出 PDF ——— */
 @media print {
+  @page {
+    size: A4;
+    margin: 14mm 16mm 16mm;
+  }
+
   .printButton {
     display: none !important;
   }
 
   .page {
+    max-width: none !important;
+    width: 100% !important;
     padding: 0 !important;
-    width: 210mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  .question {
-    break-after: page;
+  .qBlock {
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
-  .question:last-child {
-    break-after: auto;
+  .answerBox,
+  .analysisBox {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* KaTeX 与行内公式在 PDF 中更清晰 */
+  .page :global(.katex),
+  .page :global(.katex *) {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
-
