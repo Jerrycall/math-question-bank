@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "需要管理员权限" }, { status: 403 });
   }
 
-  const accounts = await db.account.findMany({
+  const rows = await db.account.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -17,6 +17,11 @@ export async function GET(request: NextRequest) {
       _count: { select: { collections: true } },
     },
   });
+
+  const accounts = rows.map((a) => ({
+    ...a,
+    isAdmin: isAdminUsername(a.username),
+  }));
 
   return NextResponse.json({ accounts });
 }

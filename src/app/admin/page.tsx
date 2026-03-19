@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Shield, Users, Bookmark, AlertTriangle } from "lucide-react";
 
@@ -12,6 +13,7 @@ type AccountRow = {
   username: string;
   createdAt: string;
   _count: { collections: number };
+  isAdmin?: boolean;
 };
 
 type CollectionRow = {
@@ -31,6 +33,15 @@ export default function AdminPage() {
   const [confirmChecked, setConfirmChecked] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [resetTarget, setResetTarget] = useState<{
+    id: string;
+    username: string;
+  } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPassword2, setNewPassword2] = useState("");
+  const [resetConfirmChecked, setResetConfirmChecked] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -106,6 +117,54 @@ export default function AdminPage() {
     }
   }
 
+  async function submitPasswordReset() {
+    if (!resetTarget) return;
+    if (newPassword.length < 6) {
+      setError("新密码至少 6 位");
+      return;
+    }
+    if (newPassword !== newPassword2) {
+      setError("两次输入的密码不一致");
+      return;
+    }
+    if (!resetConfirmChecked) {
+      setError("请勾选「确认重置该用户密码」");
+      return;
+    }
+    setResetting(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/accounts/${resetTarget.id}/password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            newPassword,
+            checkbox_confirm: true,
+          }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error || "重置失败");
+        return;
+      }
+      const uname = resetTarget.username;
+      setResetTarget(null);
+      setNewPassword("");
+      setNewPassword2("");
+      setResetConfirmChecked(false);
+      setError(null);
+      alert(`已为用户「${uname}」重置密码，请告知用户新密码。`);
+    } catch {
+      setError("重置请求失败");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto space-y-4">
@@ -166,6 +225,67 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* 重置密码表单 */}
+      {resetTarget && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="text-base">
+              重置密码：{resetTarget.username}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 max-w-md">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">新密码（至少 6 位）</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">再次输入新密码</label>
+              <Input
+                type="password"
+                value={newPassword2}
+                onChange={(e) => setNewPassword2(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={resetConfirmChecked}
+                onChange={(e) => setResetConfirmChecked(e.target.checked)}
+              />
+              确认重置该用户密码，并已线下告知用户
+            </label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={submitPasswordReset}
+                disabled={resetting}
+              >
+                {resetting ? "提交中…" : "确认重置"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setResetTarget(null);
+                  setNewPassword("");
+                  setNewPassword2("");
+                  setResetConfirmChecked(false);
+                  setError(null);
+                }}
+              >
+                取消
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 用户列表 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -202,7 +322,7 @@ export default function AdminPage() {
               {accounts.map((a) => (
                 <li
                   key={a.id}
-                  className="flex items-center gap-3 py-2 border-b border-border last:border-0"
+                  className="flex flex-wrap items-center gap-3 py-2 border-b border-border last:border-0"
                 >
                   <input
                     type="checkbox"
@@ -210,12 +330,38 @@ export default function AdminPage() {
                     onChange={() => toggleAccount(a.id)}
                   />
                   <span className="font-medium">{a.username}</span>
+                  {a.isAdmin && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                      管理员
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     {a._count?.collections ?? 0} 个题集
                   </span>
                   <span className="text-xs text-muted-foreground ml-auto">
                     {new Date(a.createdAt).toLocaleString()}
                   </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    disabled={!!a.isAdmin}
+                    title={
+                      a.isAdmin
+                        ? "管理员账号不可在此重置密码"
+                        : "为该用户设置新密码"
+                    }
+                    onClick={() => {
+                      setError(null);
+                      setResetTarget({ id: a.id, username: a.username });
+                      setNewPassword("");
+                      setNewPassword2("");
+                      setResetConfirmChecked(false);
+                    }}
+                  >
+                    重置密码
+                  </Button>
                 </li>
               ))}
             </ul>

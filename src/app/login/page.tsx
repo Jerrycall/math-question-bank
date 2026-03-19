@@ -125,6 +125,12 @@ export default function LoginPage() {
             {loading ? "处理中..." : mode === "login" ? "登录" : "注册"}
           </Button>
 
+          {mode === "login" && (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              忘记密码？本站未绑定邮箱，无法自助找回。请联系管理员在「管理」后台为你重置密码；若你是站主且管理员账号遗忘，需在数据库中手动更新密码哈希。
+            </p>
+          )}
+
           {mode === "register" && (
             <div className="text-xs text-muted-foreground">
               注册成功后将自动切换到登录界面。
