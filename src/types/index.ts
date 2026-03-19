@@ -62,7 +62,7 @@ export interface Question {
 
 export interface LearningRecord {
   id: string;
-  userId: string;
+  accountId: string;
   questionId: string;
   isCorrect: boolean;
   timeSpentS: number;
@@ -71,7 +71,7 @@ export interface LearningRecord {
 
 export interface ReviewSchedule {
   id: string;
-  userId: string;
+  accountId: string;
   questionId: string;
   dueDate: string | Date;
   intervalDays: number;
@@ -82,7 +82,7 @@ export interface ReviewSchedule {
 
 export interface KnowledgeMastery {
   id: string;
-  userId: string;
+  accountId: string;
   tagId: string;
   masteryScore: number;
   totalAttempts: number;

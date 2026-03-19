@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { RotateCcw, Calendar, BookOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,17 @@ export default function ReviewPage() {
   const [schedules, setSchedules] = useState<ReviewSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(false);
 
   useEffect(() => {
     fetch("/api/review")
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          setNeedsLogin(true);
+          return { schedules: [] };
+        }
+        return r.json();
+      })
       .then((data) => {
         setSchedules(data.schedules ?? []);
         setLoading(false);
@@ -27,6 +35,30 @@ export default function ReviewPage() {
       <div className="max-w-2xl mx-auto space-y-4 animate-pulse">
         <div className="h-8 bg-muted rounded w-1/3" />
         <div className="h-48 bg-muted rounded" />
+      </div>
+    );
+  }
+
+  if (needsLogin) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
+            <RotateCcw className="h-5 w-5 text-orange-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">间隔复习</h1>
+            <p className="text-sm text-muted-foreground">SM-2 算法驱动，科学安排复习计划</p>
+          </div>
+        </div>
+        <Card className="text-center py-12">
+          <CardContent>
+            <p className="text-muted-foreground mb-4">使用间隔复习与学习统计需先登录</p>
+            <Button asChild>
+              <Link href="/login?from=/review">去登录</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -146,7 +178,6 @@ export default function ReviewPage() {
       ) : (
         <ReviewSession
           schedules={schedules}
-          userId="user-default"
           onComplete={() => {
             setSessionStarted(false);
             setSchedules([]);

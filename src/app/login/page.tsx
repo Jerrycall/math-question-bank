@@ -50,6 +50,10 @@ export default function LoginPage() {
         return;
       }
 
+      // 通知顶部栏立即刷新登录状态（避免不刷新、没有「管理」按钮）
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:changed"));
+      }
       router.push(returnTo);
     } catch (e) {
       console.error("login page submit error:", e);

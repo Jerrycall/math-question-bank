@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { subDays, startOfDay, format } from "date-fns";
+import { subDays, format } from "date-fns";
+import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 
-const DEFAULT_USER_ID = "user-default";
+async function requireAccount(request: NextRequest): Promise<string | null> {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  return verifySession(token);
+}
 
 export async function GET(request: NextRequest) {
+  const accountId = await requireAccount(request);
+  if (!accountId) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId") ?? DEFAULT_USER_ID;
   const days = parseInt(searchParams.get("days") ?? "30");
 
   const startDate = subDays(new Date(), days);
@@ -14,23 +23,23 @@ export async function GET(request: NextRequest) {
   const [totalRecords, masteryData, recentRecords, reviewCount] =
     await Promise.all([
       db.learningRecord.aggregate({
-        where: { userId },
+        where: { accountId },
         _count: { id: true },
         _sum: { timeSpentS: true },
       }),
       db.knowledgeMastery.findMany({
-        where: { userId },
+        where: { accountId },
         include: { tag: true },
         orderBy: { masteryScore: "desc" },
         take: 12,
       }),
       db.learningRecord.findMany({
-        where: { userId, answeredAt: { gte: startDate } },
+        where: { accountId, answeredAt: { gte: startDate } },
         orderBy: { answeredAt: "asc" },
       }),
       db.reviewSchedule.count({
         where: {
-          userId,
+          accountId,
           dueDate: { lte: new Date() },
         },
       }),

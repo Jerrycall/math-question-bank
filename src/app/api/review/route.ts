@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 
-const DEFAULT_USER_ID = "user-default";
+async function requireAccount(request: NextRequest): Promise<string | null> {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  return verifySession(token);
+}
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId") ?? DEFAULT_USER_ID;
+  const accountId = await requireAccount(request);
+  if (!accountId) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
 
   const today = new Date();
   today.setHours(23, 59, 59, 999);
 
   const schedules = await db.reviewSchedule.findMany({
     where: {
-      userId,
+      accountId,
       dueDate: { lte: today },
     },
     include: {

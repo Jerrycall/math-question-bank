@@ -10,7 +10,6 @@ import { ReviewSchedule, SM2Quality } from "@/types";
 
 interface ReviewSessionProps {
   schedules: ReviewSchedule[];
-  userId: string;
   onComplete?: (results: ReviewResult[]) => void;
 }
 

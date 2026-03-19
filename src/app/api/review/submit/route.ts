@@ -2,18 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { calculateSM2, DEFAULT_SM2_STATE } from "@/lib/spaced-repetition/sm2";
 import { SM2Quality } from "@/types";
+import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 
-const DEFAULT_USER_ID = "user-default";
+async function requireAccount(request: NextRequest): Promise<string | null> {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  return verifySession(token);
+}
 
 export async function POST(request: NextRequest) {
+  const accountId = await requireAccount(request);
+  if (!accountId) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
   const { scheduleId, questionId, quality, timeSpentS, isCorrect } =
     await request.json();
-  const userId = DEFAULT_USER_ID;
 
   // 记录做题记录
   await db.learningRecord.create({
     data: {
-      userId,
+      accountId,
       questionId,
       isCorrect,
       timeSpentS,
@@ -24,7 +33,7 @@ export async function POST(request: NextRequest) {
   const existing = scheduleId
     ? await db.reviewSchedule.findUnique({ where: { id: scheduleId } })
     : await db.reviewSchedule.findUnique({
-        where: { userId_questionId: { userId, questionId } },
+        where: { accountId_questionId: { accountId, questionId } },
       });
 
   const currentState = existing
@@ -51,7 +60,7 @@ export async function POST(request: NextRequest) {
   } else {
     await db.reviewSchedule.create({
       data: {
-        userId,
+        accountId,
         questionId,
         dueDate: result.nextDueDate,
         intervalDays: result.intervalDays,
@@ -76,9 +85,9 @@ export async function POST(request: NextRequest) {
   if (question) {
     for (const { tag } of question.tags) {
       const mastery = await db.knowledgeMastery.upsert({
-        where: { userId_tagId: { userId, tagId: tag.id } },
+        where: { accountId_tagId: { accountId, tagId: tag.id } },
         create: {
-          userId,
+          accountId,
           tagId: tag.id,
           masteryScore: isCorrect ? 20 : 0,
           totalAttempts: 1,

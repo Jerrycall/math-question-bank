@@ -1,55 +1,57 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+
+const AUTH_CHANGED_EVENT = "auth:changed";
 
 type MeResponse = {
   user: null | { id: string; username: string; createdAt: string | Date };
+  isAdmin?: boolean;
 };
 
 export function UserMenu() {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<MeResponse["user"]>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setInterval> | null = null;
-
-    async function loadMe() {
-      try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (!res.ok) {
-          if (alive) setUser(null);
-          return;
-        }
-        const data = (await res.json()) as MeResponse;
-        if (alive) setUser(data.user ?? null);
-
-        // 已登录后停止轮询，避免持续打接口
-        if (data.user) {
-          if (timer) clearInterval(timer);
-          timer = null;
-        }
-      } catch {
-        if (alive) setUser(null);
-      } finally {
-        if (alive) setLoading(false);
+  const loadMe = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (!res.ok) {
+        setUser(null);
+        setIsAdmin(false);
+        return;
       }
+      const data = (await res.json()) as MeResponse;
+      setUser(data.user ?? null);
+      setIsAdmin(!!data.isAdmin);
+    } catch {
+      setUser(null);
+      setIsAdmin(false);
+    } finally {
+      setLoading(false);
     }
-
-    // 首次立即加载
-    loadMe();
-    // 登录后通常会在 1-3 秒内刷新成已登录状态；轮询直到检测到已登录
-    timer = setInterval(loadMe, 2500);
-
-    return () => {
-      alive = false;
-      if (timer) clearInterval(timer);
-    };
   }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    loadMe();
+  }, [loadMe, pathname]);
+
+  // 登录/登出后其它页面发事件，立即刷新
+  useEffect(() => {
+    const onAuthChanged = () => {
+      setLoading(true);
+      loadMe();
+    };
+    window.addEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
+  }, [loadMe]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -73,6 +75,13 @@ export function UserMenu() {
 
   return (
     <div className="flex items-center gap-3">
+      {isAdmin && (
+        <Link href="/admin">
+          <Button size="sm" variant="ghost">
+            管理
+          </Button>
+        </Link>
+      )}
       <div className="text-sm text-muted-foreground whitespace-nowrap">
         {user.username}
       </div>

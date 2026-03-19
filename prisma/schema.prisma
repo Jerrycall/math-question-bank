@@ -63,14 +63,17 @@ model Question {
   @@map("questions")
 }
 
-// 账号表（用于“我的题集”和导出 PDF）
+// 账号表（登录后统一身份：题集、学习统计、复习、知识点掌握度）
 model Account {
   id           String      @id @default(cuid())
   username     String      @unique
   passwordHash String
   createdAt    DateTime    @default(now())
 
-  collections  Collection[]
+  collections       Collection[]
+  learningRecords   LearningRecord[]
+  reviewSchedules   ReviewSchedule[]
+  masteryRecords    KnowledgeMastery[]
 
   @@map("accounts")
 }
@@ -152,45 +155,28 @@ model QuestionRelation {
   @@map("question_relations")
 }
 
-// 用户表
-model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  settingsJson Json     @default("{}") // 用户偏好设置
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // 关联
-  learningRecords  LearningRecord[]
-  reviewSchedules  ReviewSchedule[]
-  masteryRecords   KnowledgeMastery[]
-
-  @@map("users")
-}
-
-// 做题记录
+// 做题记录（绑定账号）
 model LearningRecord {
   id          String   @id @default(cuid())
-  userId      String
+  accountId   String
   questionId  String
   isCorrect   Boolean
   userAnswer  String?  @db.Text
   timeSpentS  Int      // 耗时（秒）
   answeredAt  DateTime @default(now())
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  @@index([userId, answeredAt])
+  @@index([accountId, answeredAt])
   @@index([questionId])
   @@map("learning_records")
 }
 
-// 间隔复习调度（SM-2 算法）
+// 间隔复习调度（SM-2 算法，绑定账号）
 model ReviewSchedule {
   id           String   @id @default(cuid())
-  userId       String
+  accountId    String
   questionId   String
   dueDate      DateTime // 下次复习时间
   intervalDays Int      @default(1) // 复习间隔天数
@@ -200,27 +186,27 @@ model ReviewSchedule {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, questionId])
-  @@index([userId, dueDate])
+  @@unique([accountId, questionId])
+  @@index([accountId, dueDate])
   @@map("review_schedules")
 }
 
-// 知识点掌握度
+// 知识点掌握度（绑定账号）
 model KnowledgeMastery {
   id              String   @id @default(cuid())
-  userId          String
+  accountId       String
   tagId           String
   masteryScore    Int      @default(0) // 0-100
   totalAttempts   Int      @default(0)
   correctAttempts Int      @default(0)
   updatedAt       DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, tagId])
+  @@unique([accountId, tagId])
   @@map("knowledge_mastery")
 }

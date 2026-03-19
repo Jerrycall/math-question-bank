@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { BarChart3, Target, Clock, CheckCircle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { MasteryRadar } from "@/components/StatsCharts/MasteryRadar";
 import { AccuracyTrend } from "@/components/StatsCharts/AccuracyTrend";
 import { Progress } from "@/components/ui/progress";
@@ -23,12 +24,19 @@ interface StatsData {
 export default function StatsPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsLogin, setNeedsLogin] = useState(false);
 
   useEffect(() => {
     fetch("/api/stats?days=30")
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          setNeedsLogin(true);
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
-        setStats(data);
+        setStats(data ?? null);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -44,6 +52,30 @@ export default function StatsPage() {
           ))}
         </div>
         <div className="h-64 bg-muted rounded" />
+      </div>
+    );
+  }
+
+  if (needsLogin) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-cyan-100 flex items-center justify-center">
+            <BarChart3 className="h-5 w-5 text-cyan-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">学习统计</h1>
+            <p className="text-sm text-muted-foreground">掌握度分析 · 进步趋势 · 错题管理</p>
+          </div>
+        </div>
+        <Card className="text-center py-12">
+          <CardContent>
+            <p className="text-muted-foreground mb-4">查看学习统计需先登录</p>
+            <Button asChild>
+              <Link href="/login?from=/stats">去登录</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
