@@ -125,10 +125,20 @@ function NewCollectionPageContent() {
       params.set("tagMode", tagMode);
       params.set("page", String(page));
       params.set("limit", "12");
+      if (appendTarget?.id) {
+        params.set("excludeInCollection", appendTarget.id);
+      }
 
-      const res = await fetch(`/api/questions?${params}`);
+      const res = await fetch(`/api/questions?${params}`, {
+        credentials: "include",
+      });
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
+      if (!res.ok) {
+        setQuestions([]);
+        setTotal(0);
+        return;
+      }
       setQuestions(data.questions ?? []);
       setTotal(data.total ?? 0);
     } catch {
@@ -137,7 +147,14 @@ function NewCollectionPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, difficulty, selectedTagSlugs, tagMode, page]);
+  }, [
+    searchQuery,
+    difficulty,
+    selectedTagSlugs,
+    tagMode,
+    page,
+    appendTarget?.id,
+  ]);
 
   useEffect(() => {
     fetchTags();
@@ -145,9 +162,10 @@ function NewCollectionPageContent() {
 
   useEffect(() => {
     if (!authChecked) return;
+    if (addToId && appendLoading) return;
     const timer = setTimeout(fetchQuestions, 300);
     return () => clearTimeout(timer);
-  }, [fetchQuestions, authChecked]);
+  }, [fetchQuestions, authChecked, addToId, appendLoading]);
 
   const handleTagSelectionChange = (ids: string[]) => {
     setSelectedTagIds(ids);
@@ -374,7 +392,7 @@ function NewCollectionPageContent() {
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
           {appendTarget
-            ? "可翻页继续勾选，已选会追加到该题集末尾（已在题集中的题目会自动跳过）。"
+            ? "列表已隐藏本题集中已有的题目，仅显示还可加入的题；翻页勾选后点「加入此题集」会追加到末尾。"
             : "可翻页继续勾选，已选题目会保留；录入时按勾选顺序写入题集。"}
         </p>
       </div>

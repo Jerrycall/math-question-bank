@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { Difficulty } from "@prisma/client";
+import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,8 +13,30 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") ?? "1");
     const limit = parseInt(searchParams.get("limit") ?? "12");
     const skip = (page - 1) * limit;
+    const excludeInCollection = searchParams.get("excludeInCollection")?.trim() ?? "";
 
     const where: Record<string, unknown> = {};
+
+    if (excludeInCollection) {
+      const token = request.cookies.get(SESSION_COOKIE)?.value;
+      const accountId = token ? verifySession(token) : null;
+      if (!accountId) {
+        return NextResponse.json(
+          { error: "需要登录后才能排除题集中已有题目" },
+          { status: 401 }
+        );
+      }
+      const col = await db.collection.findUnique({
+        where: { id: excludeInCollection },
+        select: { accountId: true },
+      });
+      if (!col || col.accountId !== accountId) {
+        return NextResponse.json({ error: "无权筛选该题集" }, { status: 403 });
+      }
+      where.collections = {
+        none: { collectionId: excludeInCollection },
+      };
+    }
 
     if (tags.length > 0) {
       if (tagMode === "and") {
