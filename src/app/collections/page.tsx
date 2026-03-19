@@ -46,23 +46,6 @@ export default function CollectionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function createCollection() {
-    const name = window.prompt("请输入题集名称（最多 50 字）");
-    if (!name) return;
-
-    const res = await fetch("/api/collections", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data?.error || "创建失败");
-      return;
-    }
-    await ensureAuthAndLoad();
-  }
 
   const title = useMemo(() => "我的题集", []);
 
@@ -70,7 +53,9 @@ export default function CollectionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-semibold">{title}</h1>
-        <Button onClick={createCollection}>+ 新建题集</Button>
+        <Button onClick={() => router.push("/collections/new")}>
+          + 新建题集（选题录入）
+        </Button>
       </div>
 
       {loading && <div className="text-sm text-muted-foreground">加载中...</div>}
@@ -78,7 +63,7 @@ export default function CollectionsPage() {
 
       {!loading && collections.length === 0 && (
         <div className="text-sm text-muted-foreground">
-          你还没有题集。点击「新建题集」开始保存你勾选的题目。
+          你还没有题集。点击「新建题集」进入选题界面，勾选后一键录入。
         </div>
       )}
 

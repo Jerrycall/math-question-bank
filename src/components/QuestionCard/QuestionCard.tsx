@@ -40,16 +40,28 @@ type MyCollectionSummary = {
 let myCollectionsCache: MyCollectionSummary[] | null = null;
 let myCollectionsCachePromise: Promise<MyCollectionSummary[]> | null = null;
 
+/** 创建题集后调用，使题集列表下拉框刷新 */
+export function invalidateMyCollectionsCache() {
+  myCollectionsCache = null;
+  myCollectionsCachePromise = null;
+}
+
 interface QuestionCardProps {
   question: QuestionCardQuestion;
   showAnswer?: boolean;
   compact?: boolean;
+  /** 选题模式：显示勾选框，隐藏「加入题集」按钮 */
+  selection?: {
+    checked: boolean;
+    onChange: () => void;
+  };
 }
 
 export function QuestionCard({
   question,
   showAnswer = false,
   compact = false,
+  selection,
 }: QuestionCardProps) {
   const [answerVisible, setAnswerVisible] = useState(showAnswer);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -162,12 +174,25 @@ export function QuestionCard({
     <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
-          <Link
-            href={`/questions/${question.slug}`}
-            className="text-base font-semibold hover:text-primary transition-colors line-clamp-2 flex-1"
-          >
-            {question.title}
-          </Link>
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            {selection && (
+              <label className="flex items-center pt-1 shrink-0 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-input"
+                  checked={selection.checked}
+                  onChange={selection.onChange}
+                  aria-label={`选题：${question.title}`}
+                />
+              </label>
+            )}
+            <Link
+              href={`/questions/${question.slug}`}
+              className="text-base font-semibold hover:text-primary transition-colors line-clamp-2 flex-1 min-w-0"
+            >
+              {question.title}
+            </Link>
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             <Badge
               className={`text-xs ${DIFFICULTY_COLORS[question.difficulty as Difficulty]}`}
@@ -181,7 +206,7 @@ export function QuestionCard({
               {DIFFICULTY_LABELS[question.difficulty as Difficulty]}
             </Badge>
 
-            {!compact && (
+            {!compact && !selection && (
               <div className="relative">
                 <Button
                   type="button"
@@ -227,15 +252,22 @@ export function QuestionCard({
                         </div>
                       )}
 
-                      <div className="pt-1">
+                      <div className="pt-1 space-y-2">
                         <Button
                           type="button"
                           className="w-full"
                           variant="outline"
                           onClick={createCollectionAndRefresh}
                         >
-                          + 新建题集
+                          + 新建空题集
                         </Button>
+                        <Link
+                          href="/collections/new"
+                          className="block text-center text-xs text-primary hover:underline"
+                          onClick={() => setPickerOpen(false)}
+                        >
+                          批量选题建题集 →
+                        </Link>
                       </div>
                     </div>
                   </div>
