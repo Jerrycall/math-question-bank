@@ -42,14 +42,29 @@ export default function LearnPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: rawText }),
       });
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-      } else {
+      const raw = await res.text();
+      let data: { error?: string; structured?: StructuredResult } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        setError(
+          res.ok
+            ? "返回格式异常，请稍后重试。"
+            : `请求失败（${res.status}）。若为 504，说明 AI 响应超时，可缩短题目文字后重试。`
+        );
+        return;
+      }
+      if (!res.ok || data.error) {
+        setError(data.error || `请求失败（${res.status}）`);
+        return;
+      }
+      if (data.structured) {
         setStructured(data.structured);
+      } else {
+        setError("未返回结构化结果，请重试。");
       }
     } catch {
-      setError("网络错误，请重试");
+      setError("网络错误，请检查连接后重试。");
     } finally {
       setLoading(false);
     }
@@ -64,15 +79,28 @@ export default function LearnPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: rawText, save: true }),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: { error?: string; questionId?: string } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        setError("保存失败：服务器返回异常，请重试。");
+        return;
+      }
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
       if (data.questionId) {
         setSaved(true);
         setTimeout(() => {
           window.location.href = "/questions";
         }, 1500);
+      } else {
+        setError("保存失败：未返回题目 ID。");
       }
     } catch {
-      setError("保存失败");
+      setError("保存失败：网络错误");
     } finally {
       setSaving(false);
     }
@@ -257,9 +285,18 @@ AI 将自动：
             <p>3. 确认结果后点击「保存到题库」，系统自动建立知识关联</p>
             <p>4. 保存后可在题库、知识图谱中查看，并自动加入复习计划</p>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-amber-600 mt-2">
-            <AlertCircle className="h-3.5 w-3.5" />
-            需要配置 OpenAI API Key（在 .env.local 文件中）
+          <div className="flex items-start gap-1.5 text-xs text-amber-600 mt-2">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>
+              需在环境变量中配置 AI：对话可用{" "}
+              <code className="rounded bg-muted px-1">AI_API_KEY</code> +{" "}
+              <code className="rounded bg-muted px-1">AI_API_BASE_URL</code>（如
+              DeepSeek）或 <code className="rounded bg-muted px-1">OPENAI_API_KEY</code>
+              。「保存到题库」还会写入向量，需另配{" "}
+              <code className="rounded bg-muted px-1">OPENAI_API_KEY</code>（OpenAI
+              embedding）。本地写在 <code className="rounded bg-muted px-1">.env.local</code>
+              ，线上在 Vercel → Settings → Environment Variables。
+            </span>
           </div>
         </CardContent>
       </Card>

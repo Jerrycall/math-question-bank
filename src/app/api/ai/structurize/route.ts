@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { structurizeQuestion, getEmbedding } from "@/lib/ai/structurize";
 import { db } from "@/lib/db";
 
+/** Vercel：结构化 + 可选保存较慢，延长超时（需在套餐支持的前提下生效） */
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   const { text, save = false } = await request.json();
 
@@ -76,9 +79,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ structured });
   } catch (error) {
     console.error("AI structurize error:", error);
-    return NextResponse.json(
-      { error: "AI 处理失败，请检查 API Key 配置" },
-      { status: 500 }
-    );
+    const detail =
+      error instanceof Error ? error.message.trim().slice(0, 400) : "";
+    const hint =
+      detail && detail.length > 0
+        ? detail
+        : "AI 处理失败，请检查 AI_API_KEY / OPENAI_API_KEY 与 Vercel 部署。";
+    return NextResponse.json({ error: hint }, { status: 500 });
   }
 }
