@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { getOpenAI } from "./client";
+import {
+  getChatClient,
+  getChatModel,
+  getEmbeddingClient,
+  getEmbeddingModel,
+} from "./client";
 
 const StructuredQuestionSchema = z.object({
   title: z.string().describe("题目标题，简洁描述考查内容"),
@@ -43,9 +48,9 @@ const SYSTEM_PROMPT = `你是一位专业的高中数学教师，擅长分析数
 export async function structurizeQuestion(
   rawText: string
 ): Promise<StructuredQuestion> {
-  const openai = getOpenAI();
+  const openai = getChatClient();
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: getChatModel(),
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -81,9 +86,9 @@ export async function generateVariants(
   originalQuestion: string,
   originalAnalysis: string
 ): Promise<VariantQuestions> {
-  const openai = getOpenAI();
+  const openai = getChatClient();
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: getChatModel(),
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -113,9 +118,9 @@ export async function explainQuestion(
   analysis: string,
   userQuery: string
 ): Promise<ReadableStream<Uint8Array>> {
-  const openai = getOpenAI();
+  const openai = getChatClient();
   const stream = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: getChatModel(),
     stream: true,
     messages: [
       {
@@ -144,9 +149,14 @@ export async function explainQuestion(
 }
 
 export async function getEmbedding(text: string): Promise<number[]> {
-  const openai = getOpenAI();
+  const openai = getEmbeddingClient();
+  if (!openai) {
+    throw new Error(
+      "未配置向量接口：请设置 OPENAI_API_KEY 或 AI_EMBEDDING_API_KEY（用于 text-embedding，相似题/结构化写库需要）。若仅使用 DeepSeek 对话，可另配一个 OpenAI Key 专用于 embedding。"
+    );
+  }
   const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
+    model: getEmbeddingModel(),
     input: text.slice(0, 8000), // 限制长度
   });
   return response.data[0].embedding;

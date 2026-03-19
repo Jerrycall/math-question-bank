@@ -42,6 +42,27 @@ REDIS_URL="redis://localhost:6379"
 OPENAI_API_KEY="sk-..."
 ```
 
+#### 使用 DeepSeek 做对话（讲题 / 结构化 / 变式）
+
+DeepSeek 与 OpenAI SDK 兼容。推荐配置：
+
+```env
+AI_API_BASE_URL="https://api.deepseek.com"
+AI_API_KEY="你的 DeepSeek API Key"
+# 可选，不设且 base 含 deepseek 时默认为 deepseek-chat
+AI_CHAT_MODEL="deepseek-chat"
+```
+
+**相似题**依赖向量（`text-embedding-3-small`），DeepSeek 当前不提供同类接口，请**另配** OpenAI 的 Key 专用于向量（可与上面并存）：
+
+```env
+OPENAI_API_KEY="sk-... 仅用于 embedding"
+```
+
+若只配 DeepSeek、不配 OpenAI，对话类 AI 可用，**相似题**会报错直至配置向量 Key。详见 `src/lib/ai/client.ts` 注释。
+
+Vercel 上把上述变量同样加到 **Environment Variables** 并重新部署。
+
 ### 3. 初始化数据库
 
 ```bash
