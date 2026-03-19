@@ -207,6 +207,44 @@ type GgbGenerateContext = {
   tags?: string[];
 };
 
+function normalizeForCompare(s: string): string {
+  return s.replace(/\s+/g, "").toLowerCase();
+}
+
+function extractEquationHints(text: string): string[] {
+  const hints: string[] = [];
+  const source = text.replace(/\$/g, " ");
+  const eqRegex = /([xy][^=,\n，。；;]{0,50}=[^,\n，。；;]{1,60})/gi;
+  const matches = source.match(eqRegex) ?? [];
+  for (const raw of matches) {
+    const eq = raw
+      .replace(/[：:]/g, "")
+      .replace(/\s+/g, "")
+      .trim();
+    if (!eq.includes("=")) continue;
+    if (!/[xy]/i.test(eq)) continue;
+    if (eq.length < 3 || eq.length > 80) continue;
+    hints.push(eq);
+  }
+  return Array.from(new Set(hints)).slice(0, 6);
+}
+
+function extractPointHints(text: string): string[] {
+  const hints: string[] = [];
+  const pointRegex = /([A-Z])\s*\(\s*([^\(\)]{1,40}?)\s*,\s*([^\(\)]{1,40}?)\s*\)/g;
+  let m: RegExpExecArray | null = pointRegex.exec(text);
+  while (m) {
+    const name = m[1];
+    const x = m[2].trim();
+    const y = m[3].trim();
+    if (name && x && y) {
+      hints.push(`${name}=(${x},${y})`);
+    }
+    m = pointRegex.exec(text);
+  }
+  return Array.from(new Set(hints)).slice(0, 8);
+}
+
 function normalizeGgbCommandLine(line: string): string {
   return line
     .trim()
@@ -258,10 +296,18 @@ export async function generateGgbCommands(
   context?: GgbGenerateContext
 ): Promise<GgbCommandResult> {
   const openai = getChatClient();
+  const equationHints = extractEquationHints(questionText);
+  const pointHints = extractPointHints(questionText);
   const extraContext = [
     context?.answer?.trim() ? `参考答案：\n${context.answer.trim()}` : "",
     context?.analysis?.trim() ? `参考解析：\n${context.analysis.trim()}` : "",
     context?.tags?.length ? `标签：${context.tags.join("、")}` : "",
+    equationHints.length
+      ? `题干提取到的已知方程（应优先直接体现在命令中）：\n${equationHints.join("\n")}`
+      : "",
+    pointHints.length
+      ? `题干提取到的已知点（应优先直接体现在命令中）：\n${pointHints.join("\n")}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -286,7 +332,8 @@ export async function generateGgbCommands(
 9) 尽量不要使用 Text 命令；如必须使用，只允许 Text("标签", 点对象) 两参数形式。
 10) commands 必须自包含：所有符号在使用前先定义，不依赖外部已存在对象。
 11) 若使用函数，先定义如 f(x)=...，调用时写 f(1)；不要把未定义符号直接当坐标（如 Point(f,1)）。
-12) 创建坐标点时不要使用 Point(x,y)；统一使用赋值坐标形式，如 A=(1,0)、M=(2*sqrt(2)/3,-1/3)。`,
+12) 创建坐标点时不要使用 Point(x,y)；统一使用赋值坐标形式，如 A=(1,0)、M=(2*sqrt(2)/3,-1/3)。
+13) 若题干给了明确方程/点坐标，commands 前几行必须先把这些已知对象画出来，再做后续构造。`,
       },
       {
         role: "user",
@@ -315,9 +362,17 @@ export async function generateGgbCommands(
   if (normalizedCommands.length === 0) {
     throw new Error("GGB 命令为空，请重试。");
   }
+
+  // 把题干中的明确已知对象前置，提升“贴题度”
+  const existing = new Set(normalizedCommands.map(normalizeForCompare));
+  const mustHave = [...equationHints, ...pointHints].filter(
+    (h) => !existing.has(normalizeForCompare(h))
+  );
+  const merged = [...mustHave, ...normalizedCommands].slice(0, 20);
+
   return {
     ...result.data,
-    commands: normalizedCommands,
+    commands: merged,
   };
 }
 

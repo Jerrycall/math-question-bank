@@ -75,7 +75,7 @@ export function GeoGebraPreview({ commands, className }: GeoGebraPreviewProps) {
         const applet = new window.GGBApplet(
           {
             id: appletId,
-            appName: "geometry",
+            appName: "classic",
             width: 900,
             height: 520,
             showToolBar: true,
@@ -86,6 +86,7 @@ export function GeoGebraPreview({ commands, className }: GeoGebraPreviewProps) {
             borderColor: "#e5e7eb",
             scaleContainerClass: "ggb-scale-container",
             allowStyleBar: true,
+            showToolBarHelp: false,
           },
           true
         );
