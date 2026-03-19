@@ -330,9 +330,11 @@ function sanitizeGgbCommandLine(line: string): string {
     "$1=($2,$3)"
   );
 
-  // 至少应像命令：包含 "(" 且以 ")" 结尾，或是 a = ...
+  // 至少应像命令：
+  //   1) 函数调用或独立命令：Circle(A, r)、Intersect(f,g) 等
+  //   2) 赋值 / 方程：A=(1,0)、f(x)=x^2+1、x^2+y^2=1 等（含 = 的都算）
   const looksLikeCommand =
-    (s.includes("(") && s.endsWith(")")) || /^[A-Za-z][A-Za-z0-9_]*\s*=/.test(s);
+    (s.includes("(") && s.endsWith(")")) || s.includes("=");
   if (!looksLikeCommand) return "";
 
   return s;
@@ -394,28 +396,27 @@ function validateCommands(commands: string[]): {
     "yAxis",
   ]);
   const builtins = new Set<string>([
-    "sqrt",
-    "sin",
-    "cos",
-    "tan",
-    "abs",
-    "exp",
-    "ln",
-    "log",
-    "Point",
-    "Line",
-    "Segment",
-    "Circle",
-    "Ellipse",
-    "Hyperbola",
-    "Parabola",
-    "Intersect",
-    "Distance",
-    "Midpoint",
-    "Slope",
-    "Function",
-    "Text",
-    "Dot",
+    // math functions
+    "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "abs",
+    "exp", "ln", "log", "floor", "ceil", "round", "min", "max",
+    "mod", "gcd", "lcm", "nroot",
+    // GeoGebra commands
+    "Point", "Line", "Segment", "Circle", "Ellipse", "Hyperbola",
+    "Parabola", "Intersect", "Distance", "Midpoint", "Slope",
+    "Function", "Text", "Dot", "Cross", "Vector", "Ray",
+    "Tangent", "Normal", "Perpendicular", "Parallel",
+    "Polygon", "Triangle", "Rectangle",
+    "Reflect", "Rotate", "Translate", "Dilate",
+    "Area", "Perimeter", "Length", "Angle",
+    "IntersectRegion", "Sequence", "Sum",
+    // common GeoGebra pre-defined objects
+    "xAxis", "yAxis", "XAxis", "YAxis",
+    "Origin", "O",
+    // single letters are valid GeoGebra names for functions/lines/points
+    "a","b","c","d","e","f","g","h","i","j","k","l","m",
+    "n","o","p","q","r","s","t","u","v","w",
+    "A","B","C","D","E","F","G","H","I","J","K","L","M",
+    "N","P","Q","R","S","T","U","V","W",
   ]);
 
   const symbolRegex = /\b([A-Za-z][A-Za-z0-9_]*)\b/g;
@@ -534,17 +535,25 @@ export async function generateGgbCommands(
     );
     if (plannedCommands.length < 3) return null;
 
-    const coverage = computeCoverageScore(plannedCommands, [
-      ...mustHaveParabola,
-      ...mustHave,
-    ]);
+    const allMustHave = [...mustHaveParabola, ...mustHave];
+    const coverage = computeCoverageScore(plannedCommands, allMustHave);
+    if (allMustHave.length > 0 && coverage < 0.6) return null;
+
     const validation = validateCommands(plannedCommands);
-    if (coverage < 0.6 || !validation.ok) return null;
+    const validationNotes =
+      validation.issues.length > 0
+        ? [`[静态检查提示] ${validation.issues.join("; ")}`]
+        : [];
+    const baseNotes = Array.isArray(planResult.data.notes)
+      ? planResult.data.notes
+      : planResult.data.notes
+      ? [planResult.data.notes as string]
+      : [];
 
     return {
       commands: plannedCommands,
       summary: planResult.data.summary,
-      notes: planResult.data.notes,
+      notes: [...baseNotes, ...validationNotes],
     };
   };
 
