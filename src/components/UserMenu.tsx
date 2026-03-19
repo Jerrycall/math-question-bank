@@ -16,7 +16,9 @@ export function UserMenu() {
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    async function loadMe() {
       try {
         const res = await fetch("/api/auth/me", { credentials: "include" });
         if (!res.ok) {
@@ -25,14 +27,27 @@ export function UserMenu() {
         }
         const data = (await res.json()) as MeResponse;
         if (alive) setUser(data.user ?? null);
+
+        // 已登录后停止轮询，避免持续打接口
+        if (data.user) {
+          if (timer) clearInterval(timer);
+          timer = null;
+        }
       } catch {
         if (alive) setUser(null);
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    }
+
+    // 首次立即加载
+    loadMe();
+    // 登录后通常会在 1-3 秒内刷新成已登录状态；轮询直到检测到已登录
+    timer = setInterval(loadMe, 2500);
+
     return () => {
       alive = false;
+      if (timer) clearInterval(timer);
     };
   }, []);
 
