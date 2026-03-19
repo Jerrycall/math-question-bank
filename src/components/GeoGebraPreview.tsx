@@ -119,9 +119,17 @@ export function GeoGebraPreview({ commands, className }: GeoGebraPreviewProps) {
       }
 
       if (typeof api.reset === "function") api.reset();
-      for (const cmd of commands) {
-        if (!cmd.trim()) continue;
-        api.evalCommand(cmd);
+      for (let i = 0; i < commands.length; i += 1) {
+        const cmd = commands[i]?.trim();
+        if (!cmd) continue;
+        // 跳过明显不是 GeoGebra 命令的说明行，避免整批执行被弹窗打断
+        if (!cmd.includes("(") && !cmd.includes("=")) continue;
+        if (/^note\s*:|^tips?\s*:|^the\s+/i.test(cmd)) continue;
+        const ok = api.evalCommand(cmd);
+        if (!ok) {
+          setError(`第 ${i + 1} 行命令执行失败：${cmd}`);
+          break;
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "命令执行失败");

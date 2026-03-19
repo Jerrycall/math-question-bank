@@ -215,6 +215,37 @@ function normalizeGgbCommandLine(line: string): string {
     .replace(/^`|`$/g, "");
 }
 
+function sanitizeGgbCommandLine(line: string): string {
+  let s = normalizeGgbCommandLine(line);
+  if (!s) return "";
+
+  // 过滤说明性文本（非命令）
+  if (
+    /^note\s*:|^tips?\s*:|^summary\s*:/i.test(s) ||
+    /^the\s+/i.test(s) ||
+    /^if\s+/i.test(s)
+  ) {
+    return "";
+  }
+
+  // 移除行内注释（保留真正命令）
+  s = s.replace(/\s*(\/\/|#).+$/, "").trim();
+  if (!s) return "";
+
+  // 若是 Text("...", P, (0,1)) 这类易报错写法，退化为 Text("...", P)
+  s = s.replace(
+    /^Text\(\s*("[^"]*"|'[^']*')\s*,\s*([^,()]+(?:\([^)]*\))?)\s*,\s*\([^)]*\)\s*\)$/i,
+    'Text($1, $2)'
+  );
+
+  // 至少应像命令：包含 "(" 且以 ")" 结尾，或是 a = ...
+  const looksLikeCommand =
+    (s.includes("(") && s.endsWith(")")) || /^[A-Za-z][A-Za-z0-9_]*\s*=/.test(s);
+  if (!looksLikeCommand) return "";
+
+  return s;
+}
+
 export async function generateGgbCommands(
   questionText: string,
   userIntent?: string,
@@ -244,7 +275,9 @@ export async function generateGgbCommands(
 4) 按“先定义基础对象，再构造目标对象，最后标注关键量”的顺序输出。
 5) 优先使用这些可执行语法：Point / Line / Segment / Circle / Ellipse / Hyperbola / Parabola / Intersect / Distance / Midpoint / Slope / Function。
 6) 如果题目信息不足，先生成通用可运行骨架命令，并在 notes 说明还需补充的条件。
-7) 至少返回 3 条命令；命令总数不超过 20 条。`,
+7) 至少返回 3 条命令；命令总数不超过 20 条。
+8) 不要输出任何英文说明行；严禁输出诸如 "The commands are ..." 这类描述句。
+9) 尽量不要使用 Text 命令；如必须使用，只允许 Text("标签", 点对象) 两参数形式。`,
       },
       {
         role: "user",
@@ -268,7 +301,7 @@ export async function generateGgbCommands(
     throw new Error(`GGB 命令格式校验失败：${issues || result.error.message}`);
   }
   const normalizedCommands = result.data.commands
-    .map(normalizeGgbCommandLine)
+    .map(sanitizeGgbCommandLine)
     .filter(Boolean);
   if (normalizedCommands.length === 0) {
     throw new Error("GGB 命令为空，请重试。");
