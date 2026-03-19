@@ -82,7 +82,15 @@ export default function CollectionDetailPage() {
         alert(data?.error || "更新失败");
         return;
       }
-      await load();
+      setCollection((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          questions: prev.questions.map((q) =>
+            q.id === questionId ? { ...q, pageBreakBefore } : q
+          ),
+        };
+      });
     } catch (e) {
       console.error("setPageBreakBefore error:", e);
       alert("更新失败");
