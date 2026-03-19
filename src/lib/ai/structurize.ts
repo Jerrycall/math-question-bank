@@ -201,6 +201,28 @@ const GgbCommandSchema = z.object({
 
 export type GgbCommandResult = z.infer<typeof GgbCommandSchema>;
 
+const stringListField = z
+  .union([z.array(z.string()), z.string()])
+  .transform((v) =>
+    Array.isArray(v)
+      ? v
+      : String(v)
+          .split(/\r?\n|；|;/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+  );
+
+const GgbPlanSchema = z.object({
+  knownObjects: stringListField.default([]).describe("题干已知对象（方程、点、常量）"),
+  constructions: stringListField.default([]).describe("构造命令（线、交点、切线等）"),
+  metrics: stringListField.default([]).describe("计算命令（距离、斜率、点积等）"),
+  labels: stringListField.default([]).describe("可选标注命令"),
+  summary: z.string().optional().default(""),
+  notes: stringListField.optional().default([]),
+});
+
+type GgbPlan = z.infer<typeof GgbPlanSchema>;
+
 type GgbGenerateContext = {
   answer?: string;
   analysis?: string;
@@ -230,6 +252,27 @@ function extractEquationHints(text: string): string[] {
     hints.push(eq);
   }
   return Array.from(new Set(hints)).slice(0, 6);
+}
+
+function buildParabolaMustHaveCommands(
+  questionText: string,
+  context?: GgbGenerateContext
+): string[] {
+  const combined = [
+    questionText,
+    context?.answer ?? "",
+    context?.analysis ?? "",
+  ].join("\n");
+  if (!combined.includes("抛物线")) return [];
+
+  const eqs = extractEquationHints(combined);
+  const parabolaLike = eqs.filter(
+    (eq) =>
+      /y=/i.test(eq) &&
+      /(x\^2|x²)/i.test(eq) &&
+      !/(sqrt|√)/i.test(eq)
+  );
+  return parabolaLike.slice(0, 2);
 }
 
 function extractPointHints(text: string): string[] {
@@ -295,6 +338,128 @@ function sanitizeGgbCommandLine(line: string): string {
   return s;
 }
 
+function compilePlanToCommands(
+  plan: GgbPlan,
+  mustHave: string[],
+  mustHaveParabola: string[]
+): string[] {
+  const staged = [
+    ...mustHaveParabola,
+    ...mustHave,
+    ...plan.knownObjects,
+    ...plan.constructions,
+    ...plan.metrics,
+    ...plan.labels,
+  ];
+  const dedup = new Set<string>();
+  const out: string[] = [];
+  for (const raw of staged) {
+    const cmd = sanitizeGgbCommandLine(raw);
+    if (!cmd) continue;
+    const key = normalizeForCompare(cmd);
+    if (dedup.has(key)) continue;
+    dedup.add(key);
+    out.push(cmd);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+function computeCoverageScore(commands: string[], mustHave: string[]): number {
+  if (mustHave.length === 0) return 1;
+  const existing = new Set(commands.map(normalizeForCompare));
+  let hit = 0;
+  for (const item of mustHave) {
+    if (existing.has(normalizeForCompare(item))) hit += 1;
+  }
+  return hit / mustHave.length;
+}
+
+function validateCommands(commands: string[]): {
+  ok: boolean;
+  issues: string[];
+  unknownRefs: string[];
+} {
+  const issues: string[] = [];
+  const unknownRefs = new Set<string>();
+  const defined = new Set<string>([
+    "x",
+    "y",
+    "z",
+    "pi",
+    "e",
+    "XAxis",
+    "YAxis",
+    "xAxis",
+    "yAxis",
+  ]);
+  const builtins = new Set<string>([
+    "sqrt",
+    "sin",
+    "cos",
+    "tan",
+    "abs",
+    "exp",
+    "ln",
+    "log",
+    "Point",
+    "Line",
+    "Segment",
+    "Circle",
+    "Ellipse",
+    "Hyperbola",
+    "Parabola",
+    "Intersect",
+    "Distance",
+    "Midpoint",
+    "Slope",
+    "Function",
+    "Text",
+    "Dot",
+  ]);
+
+  const symbolRegex = /\b([A-Za-z][A-Za-z0-9_]*)\b/g;
+  for (let i = 0; i < commands.length; i += 1) {
+    const cmd = commands[i];
+    const assign = cmd.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.+)$/);
+    if (assign) {
+      const lhs = assign[1];
+      const rhs = assign[2];
+      let m: RegExpExecArray | null = symbolRegex.exec(rhs);
+      while (m) {
+        const sym = m[1];
+        const prev = rhs[m.index - 1];
+        if (prev !== "." && !builtins.has(sym) && !defined.has(sym)) {
+          unknownRefs.add(sym);
+        }
+        m = symbolRegex.exec(rhs);
+      }
+      defined.add(lhs);
+      continue;
+    }
+
+    let m: RegExpExecArray | null = symbolRegex.exec(cmd);
+    while (m) {
+      const sym = m[1];
+      const next = cmd[m.index + sym.length];
+      const isFuncName = next === "(";
+      if (isFuncName && builtins.has(sym)) {
+        m = symbolRegex.exec(cmd);
+        continue;
+      }
+      if (!builtins.has(sym) && !defined.has(sym)) {
+        unknownRefs.add(sym);
+      }
+      m = symbolRegex.exec(cmd);
+    }
+  }
+
+  if (unknownRefs.size > 0) {
+    issues.push(`可能存在未定义符号：${Array.from(unknownRefs).slice(0, 8).join(", ")}`);
+  }
+  return { ok: issues.length === 0, issues, unknownRefs: Array.from(unknownRefs) };
+}
+
 export async function generateGgbCommands(
   questionText: string,
   userIntent?: string,
@@ -303,6 +468,7 @@ export async function generateGgbCommands(
   const openai = getChatClient();
   const equationHints = extractEquationHints(questionText);
   const pointHints = extractPointHints(questionText);
+  const parabolaMustHave = buildParabolaMustHaveCommands(questionText, context);
   const extraContext = [
     context?.answer?.trim() ? `参考答案：\n${context.answer.trim()}` : "",
     context?.analysis?.trim() ? `参考解析：\n${context.analysis.trim()}` : "",
@@ -316,6 +482,83 @@ export async function generateGgbCommands(
   ]
     .filter(Boolean)
     .join("\n\n");
+
+  const mustHave = [...equationHints, ...pointHints];
+  const mustHaveParabola = parabolaMustHave;
+
+  const tryPlanCompile = async (
+    extraConstraint?: string
+  ): Promise<GgbCommandResult | null> => {
+    const planResp = await openai.chat.completions.create({
+      model: getChatModel(),
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `你是 GeoGebra 作图规划器。先输出“对象计划”，不要直接写解释。
+
+返回 JSON 键：
+- knownObjects: 已知对象命令（方程/点）
+- constructions: 构造命令
+- metrics: 计算量命令
+- labels: 标签命令（可选）
+- summary, notes
+
+约束：
+1) 每项必须是单行 GeoGebra 命令候选（不是自然语言）。
+2) 先定义后使用，自包含。
+3) 坐标点使用 A=(x,y)，不用 Point(x,y)。`,
+        },
+        {
+          role: "user",
+          content: `题目内容：\n${questionText}\n\n作图需求：\n${
+            userIntent?.trim() || "按题意给出标准作图命令"
+          }${extraContext ? `\n\n补充上下文：\n${extraContext}` : ""}${
+            extraConstraint ? `\n\n额外硬约束：\n${extraConstraint}` : ""
+          }\n\n请返回 JSON。`,
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 4096,
+    });
+
+    const planJson = planResp.choices[0]?.message?.content ?? "";
+    const planParsed = parseJsonObjectFromModelContent(planJson);
+    const planResult = GgbPlanSchema.safeParse(planParsed);
+    if (!planResult.success) return null;
+
+    const plannedCommands = compilePlanToCommands(
+      planResult.data,
+      mustHave,
+      mustHaveParabola
+    );
+    if (plannedCommands.length < 3) return null;
+
+    const coverage = computeCoverageScore(plannedCommands, [
+      ...mustHaveParabola,
+      ...mustHave,
+    ]);
+    const validation = validateCommands(plannedCommands);
+    if (coverage < 0.6 || !validation.ok) return null;
+
+    return {
+      commands: plannedCommands,
+      summary: planResult.data.summary,
+      notes: planResult.data.notes,
+    };
+  };
+
+  // 1) IR 计划模式：先产对象计划，再由规则编译为命令（更稳定）
+  try {
+    const first = await tryPlanCompile();
+    if (first) return first;
+    const second = await tryPlanCompile(
+      `以下对象必须覆盖：${[...mustHaveParabola, ...mustHave].join(" ; ")}。且不要出现未定义符号。`
+    );
+    if (second) return second;
+  } catch {
+    // 计划模式失败时回退到直接命令模式
+  }
 
   const response = await openai.chat.completions.create({
     model: getChatModel(),
@@ -368,16 +611,25 @@ export async function generateGgbCommands(
     throw new Error("GGB 命令为空，请重试。");
   }
 
-  // 把题干中的明确已知对象前置，提升“贴题度”
+  // 回退模式下把题干中的明确已知对象前置，提升“贴题度”
   const existing = new Set(normalizedCommands.map(normalizeForCompare));
-  const mustHave = [...equationHints, ...pointHints].filter(
+  const missingMustHave = mustHave.filter(
     (h) => !existing.has(normalizeForCompare(h))
   );
-  const merged = [...mustHave, ...normalizedCommands].slice(0, 20);
+  const missingParabola = mustHaveParabola.filter(
+    (h) => !existing.has(normalizeForCompare(h))
+  );
+  const merged = [...missingParabola, ...missingMustHave, ...normalizedCommands].slice(0, 20);
+  const fallbackValidation = validateCommands(merged);
+  const fallbackNotes = [
+    ...(result.data.notes ?? []),
+    ...(fallbackValidation.ok ? [] : fallbackValidation.issues),
+  ];
 
   return {
     ...result.data,
     commands: merged,
+    notes: fallbackNotes,
   };
 }
 
