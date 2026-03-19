@@ -61,6 +61,76 @@ function structurizeFetchInit(body: object): RequestInit {
   return init;
 }
 
+type StructurizePayload = {
+  error?: string;
+  structured?: StructuredResult;
+  questionId?: string;
+};
+
+/** 接口返回 SSE（带心跳）或旧版纯 JSON */
+async function parseStructurizePayload(res: Response): Promise<StructurizePayload> {
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("text/event-stream")) {
+    return parseSseStructurizePayload(res);
+  }
+  const raw = await res.text();
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw) as StructurizePayload;
+  } catch {
+    return {};
+  }
+}
+
+async function parseSseStructurizePayload(res: Response): Promise<StructurizePayload> {
+  const reader = res.body?.getReader();
+  if (!reader) return {};
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let last: StructurizePayload | null = null;
+
+  const consumeEventBlocks = () => {
+    for (;;) {
+      const idx = buffer.indexOf("\n\n");
+      if (idx === -1) break;
+      const block = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      for (const line of block.split("\n")) {
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+          try {
+            last = JSON.parse(jsonStr) as StructurizePayload;
+          } catch {
+            /* 忽略非 JSON 行 */
+          }
+        }
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    consumeEventBlocks();
+  }
+  buffer += decoder.decode();
+  consumeEventBlocks();
+  for (const line of buffer.split("\n")) {
+    if (line.startsWith("data: ")) {
+      const jsonStr = line.slice(6).trim();
+      if (!jsonStr) continue;
+      try {
+        last = JSON.parse(jsonStr) as StructurizePayload;
+      } catch {
+        /* */
+      }
+    }
+  }
+  return last ?? {};
+}
+
 export default function LearnPage() {
   const [rawText, setRawText] = useState("");
   const [structured, setStructured] = useState<StructuredResult | null>(null);
@@ -81,26 +151,19 @@ export default function LearnPage() {
         "/api/ai/structurize",
         structurizeFetchInit({ text: rawText })
       );
-      const raw = await res.text();
-      let data: { error?: string; structured?: StructuredResult } = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        setError(
-          res.ok
-            ? "返回格式异常，请稍后重试。"
-            : `请求失败（${res.status}）。若为 504，说明 AI 响应超时，可缩短题目文字后重试。`
-        );
+      const data = await parseStructurizePayload(res);
+      if (data.error) {
+        setError(data.error);
         return;
       }
-      if (!res.ok || data.error) {
-        setError(data.error || `请求失败（${res.status}）`);
+      if (!res.ok && !data.structured) {
+        setError(`请求失败（${res.status}）。若为 504，说明 AI 响应超时，可缩短题目文字后重试。`);
         return;
       }
       if (data.structured) {
         setStructured(data.structured);
       } else {
-        setError("未返回结构化结果，请重试。");
+        setError("未返回结构化结果，请稍后重试。");
       }
     } catch (e) {
       setError(fetchErrorHint(e));
@@ -117,16 +180,13 @@ export default function LearnPage() {
         "/api/ai/structurize",
         structurizeFetchInit({ text: rawText, save: true })
       );
-      const raw = await res.text();
-      let data: { error?: string; questionId?: string } = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        setError("保存失败：服务器返回异常，请重试。");
-        return;
-      }
+      const data = await parseStructurizePayload(res);
       if (data.error) {
         setError(data.error);
+        return;
+      }
+      if (!res.ok && !data.questionId) {
+        setError(`保存失败：请求异常（${res.status}）`);
         return;
       }
       if (data.questionId) {

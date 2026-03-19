@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 /** Vercel：结构化 + 可选保存较慢，延长超时（需在套餐支持的前提下生效） */
 export const maxDuration = 60;
 
+export const dynamic = "force-dynamic";
+
 function errorToClientMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim().slice(0, 500);
@@ -33,15 +35,25 @@ export async function POST(request: NextRequest) {
   }
 
   /**
-   * 用流式响应：在 AI 完成前就返回 HTTP 头并尽快写出首字节，避免部分 CDN/网关
-   * 「首字节超时」在整段 JSON 缓冲好之前断开连接（浏览器表现为 Failed to fetch）。
-   * JSON 允许前导空白，先写 \\n 再写完整对象，合并后仍能被 JSON.parse。
+   * SSE：首包立刻发出 + 等待 AI 期间定时 `: ping`，避免部分网关/代理「长时间无流量」直接断连
+   * （浏览器表现为 Failed to fetch）。最终结果放在单行 `data: {...}` 里。
    */
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      controller.enqueue(encoder.encode("\n"));
+      let interval: ReturnType<typeof setInterval> | null = null;
+      const safePing = () => {
+        try {
+          controller.enqueue(encoder.encode(": ping\n\n"));
+        } catch {
+          /* 流已关闭 */
+        }
+      };
       try {
+        controller.enqueue(encoder.encode("retry: 25000\n\n"));
+        safePing();
+        interval = setInterval(safePing, 7000);
+
         const structured = await structurizeQuestion(text);
 
         if (save) {
@@ -103,17 +115,24 @@ export async function POST(request: NextRequest) {
           `;
 
           controller.enqueue(
-            encoder.encode(JSON.stringify({ structured, questionId: question.id }))
+            encoder.encode(
+              `data: ${JSON.stringify({ structured, questionId: question.id })}\n\n`
+            )
           );
         } else {
-          controller.enqueue(encoder.encode(JSON.stringify({ structured })));
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ structured })}\n\n`)
+          );
         }
       } catch (error) {
         console.error("AI structurize error:", error);
         controller.enqueue(
-          encoder.encode(JSON.stringify({ error: errorToClientMessage(error) }))
+          encoder.encode(
+            `data: ${JSON.stringify({ error: errorToClientMessage(error) })}\n\n`
+          )
         );
       } finally {
+        if (interval) clearInterval(interval);
         controller.close();
       }
     },
@@ -122,8 +141,9 @@ export async function POST(request: NextRequest) {
   return new NextResponse(stream, {
     status: 200,
     headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     },
   });
