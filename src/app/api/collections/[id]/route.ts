@@ -57,7 +57,10 @@ export async function GET(
       accountId: collection.accountId,
       createdAt: collection.createdAt,
       questionsCount: collection._count.questions,
-      questions: collection.questions.map((cq) => cq.question),
+      questions: collection.questions.map((cq) => ({
+        ...cq.question,
+        pageBreakBefore: cq.pageBreakBefore,
+      })),
     },
   });
 }

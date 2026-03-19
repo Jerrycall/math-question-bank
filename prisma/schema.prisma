@@ -93,10 +93,12 @@ model Collection {
 
 // 题集-题目关联
 model CollectionQuestion {
-  collectionId String
-  questionId   String
-  sortOrder    Int      @default(0)
-  addedAt      DateTime @default(now())
+  collectionId    String
+  questionId      String
+  sortOrder       Int      @default(0)
+  /// 导出 PDF/打印时：在该题之前强制分页（第一题无效）
+  pageBreakBefore Boolean  @default(false)
+  addedAt         DateTime @default(now())
 
   collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   question     Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)

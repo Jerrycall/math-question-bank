@@ -6,13 +6,14 @@ import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
 import { DIFFICULTY_LABELS, type Difficulty } from "@/types";
 import { PrintButton } from "./PrintButton";
 import styles from "./print.module.css";
+import { cn } from "@/lib/utils";
 
 export default async function PrintPage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { showAnswers?: string };
+  searchParams?: { showAnswers?: string; answerSpace?: string };
 }) {
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (!token) return notFound();
@@ -22,6 +23,7 @@ export default async function PrintPage({
 
   const collectionId = params.id;
   const showAnswers = (searchParams?.showAnswers ?? "0") === "1";
+  const showAnswerSpace = (searchParams?.answerSpace ?? "1") !== "0";
 
   const collection = await db.collection.findUnique({
     where: { id: collectionId },
@@ -51,7 +53,10 @@ export default async function PrintPage({
 
   if (!collection || collection.accountId !== accountId) return notFound();
 
-  const questions = collection.questions.map((cq) => cq.question);
+  const rows = collection.questions.map((cq) => ({
+    pageBreakBefore: cq.pageBreakBefore,
+    ...cq.question,
+  }));
   const printedAt = new Date().toLocaleString("zh-CN", {
     year: "numeric",
     month: "2-digit",
@@ -73,17 +78,24 @@ export default async function PrintPage({
           <span className={showAnswers ? styles.docBadgeStrong : styles.docBadge}>
             {showAnswers ? "题目 + 答案 + 解析" : "仅题目（无答案）"}
           </span>
-          <span>共 {questions.length} 题</span>
+          <span>共 {rows.length} 题</span>
           <span>生成时间 {printedAt}</span>
+          {showAnswerSpace ? (
+            <span className={styles.docBadge}>含手写答题区</span>
+          ) : null}
         </div>
       </header>
 
       <div className={styles.qList}>
-        {questions.map((q, idx) => {
+        {rows.map((q, idx) => {
           const diffLabel =
             DIFFICULTY_LABELS[q.difficulty as Difficulty] ?? String(q.difficulty);
+          const forcePageBreak = q.pageBreakBefore && idx > 0;
           return (
-            <article key={q.id} className={styles.qBlock}>
+            <article
+              key={q.id}
+              className={cn(styles.qBlock, forcePageBreak && styles.pageBreakBefore)}
+            >
               <div className={styles.qHead}>
                 <div className={styles.qNum} aria-hidden>
                   {idx + 1}
@@ -117,6 +129,13 @@ export default async function PrintPage({
                     </div>
                   </div>
                 </>
+              )}
+
+              {showAnswerSpace && (
+                <div className={styles.answerRegion}>
+                  <div className={styles.answerRegionLabel}>答题区（手写）</div>
+                  <div className={styles.answerLines} aria-hidden />
+                </div>
               )}
             </article>
           );

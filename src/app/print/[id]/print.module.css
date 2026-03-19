@@ -204,6 +204,49 @@
   margin-bottom: 20px;
 }
 
+/* 手动分页：在该题前开始新页（打印时生效，屏幕上加顶部分隔提示） */
+.pageBreakBefore {
+  position: relative;
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.pageBreakBefore::before {
+  content: "";
+  display: block;
+  height: 0;
+  border-top: 2px dashed #cbd5e1;
+  margin: -4px 0 12px;
+}
+
+/* 每题后手写答题区 */
+.answerRegion {
+  margin-top: 16px;
+}
+
+.answerRegionLabel {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--print-muted);
+  margin-bottom: 6px;
+}
+
+.answerLines {
+  min-height: 38mm;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  background-color: #fafafa;
+  background-image: repeating-linear-gradient(
+    transparent 0,
+    transparent 26px,
+    rgba(148, 163, 184, 0.45) 26px,
+    rgba(148, 163, 184, 0.45) 27px
+  );
+  background-attachment: local;
+}
+
 /* ——— 打印 / 导出 PDF ——— */
 @media print {
   @page {
@@ -230,6 +273,24 @@
     box-shadow: none !important;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .pageBreakBefore {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .pageBreakBefore::before {
+    display: none !important;
+  }
+
+  .answerLines {
+    min-height: 42mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: #fafafa !important;
   }
 
   .answerBox,

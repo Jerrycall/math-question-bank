@@ -39,3 +39,47 @@ export async function DELETE(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; qId: string }> }
+) {
+  const accountId = await requireAccount(request);
+  if (!accountId) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
+  try {
+    const { id: collectionId, qId: questionId } = await params;
+    let body: { pageBreakBefore?: boolean };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "请求体无效" }, { status: 400 });
+    }
+
+    if (typeof body.pageBreakBefore !== "boolean") {
+      return NextResponse.json({ error: "需要 pageBreakBefore 布尔值" }, { status: 400 });
+    }
+
+    const current = await db.collection.findUnique({
+      where: { id: collectionId },
+      select: { accountId: true },
+    });
+    if (!current || current.accountId !== accountId) {
+      return NextResponse.json({ error: "无权限" }, { status: 403 });
+    }
+
+    const updated = await db.collectionQuestion.update({
+      where: {
+        collectionId_questionId: { collectionId, questionId },
+      },
+      data: { pageBreakBefore: body.pageBreakBefore },
+    });
+
+    return NextResponse.json({ ok: true, pageBreakBefore: updated.pageBreakBefore });
+  } catch (e) {
+    console.error("[api/collections/[id]/questions/[qId]] PATCH error:", e);
+    return NextResponse.json({ error: "更新失败" }, { status: 500 });
+  }
+}
+
