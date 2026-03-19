@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { BarChart3, Target, Clock, CheckCircle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { MasteryRadar } from "@/components/StatsCharts/MasteryRadar";
 import { AccuracyTrend } from "@/components/StatsCharts/AccuracyTrend";
 import { Progress } from "@/components/ui/progress";
@@ -71,9 +72,15 @@ export default function StatsPage() {
         <Card className="text-center py-12">
           <CardContent>
             <p className="text-muted-foreground mb-4">查看学习统计需先登录</p>
-            <Button asChild>
-              <Link href="/login?from=/stats">去登录</Link>
-            </Button>
+            <Link
+              href="/login?from=/stats"
+              className={cn(
+                "inline-flex items-center justify-center rounded-lg font-medium h-9 px-4 py-2 text-sm",
+                "bg-primary text-primary-foreground hover:bg-primary/90"
+              )}
+            >
+              去登录
+            </Link>
           </CardContent>
         </Card>
       </div>

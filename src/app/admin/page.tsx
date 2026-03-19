@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Shield, Users, Bookmark, AlertTriangle } from "lucide-react";
 
 type AccountRow = {
@@ -132,9 +133,15 @@ export default function AdminPage() {
             <p className="text-sm mb-4">
               管理员通过环境变量 <code className="bg-muted px-1 rounded">ADMIN_USERNAMES</code> 指定（逗号分隔用户名）。
             </p>
-            <Button asChild variant="outline">
-              <Link href="/">返回首页</Link>
-            </Button>
+            <Link
+              href="/"
+              className={cn(
+                "inline-flex items-center justify-center rounded-lg font-medium h-9 px-4 py-2 text-sm",
+                "border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+              )}
+            >
+              返回首页
+            </Link>
           </CardContent>
         </Card>
       </div>
