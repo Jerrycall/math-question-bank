@@ -167,9 +167,16 @@ ${originalAnalysis}
 
 const GgbCommandSchema = z.object({
   commands: z
-    .array(z.string().min(1))
-    .min(1)
-    .max(20)
+    .union([z.array(z.string()), z.string()])
+    .transform((v) =>
+      Array.isArray(v)
+        ? v
+        : String(v)
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+    )
+    .pipe(z.array(z.string().min(1)).min(1).max(20))
     .describe("GeoGebra 命令行列表，每行一个可直接粘贴到输入栏的命令"),
   summary: z
     .string()
@@ -177,7 +184,16 @@ const GgbCommandSchema = z.object({
     .default("")
     .describe("简要说明作图思路与命令执行顺序"),
   notes: z
-    .array(z.string())
+    .union([z.array(z.string()), z.string()])
+    .transform((v) =>
+      Array.isArray(v)
+        ? v
+        : String(v)
+            .split(/\r?\n|；|;/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+    )
+    .pipe(z.array(z.string()))
     .optional()
     .default([])
     .describe("可选注意事项，如参数范围、坐标窗口设置"),
