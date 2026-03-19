@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Network, Loader2 } from "lucide-react";
-import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
+import { QuestionCard, MathRenderer, type QuestionCardQuestion } from "@/components/QuestionCard";
 import { Badge } from "@/components/ui/badge";
 import { TAG_TYPE_COLORS, TAG_TYPE_LABELS } from "@/types";
 
@@ -134,7 +134,17 @@ export function TagDetailClient({ slug }: { slug: string }) {
         </div>
 
         {tag.description && (
-          <p className="text-muted-foreground">{tag.description}</p>
+          <div className="rounded-xl border border-border bg-card/50 p-4 md:p-5 shadow-sm">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+              标签说明
+            </p>
+            <div className="text-foreground">
+              <MathRenderer
+                content={tag.description}
+                className="prose-base prose-headings:font-semibold prose-h2:text-lg prose-h3:text-base"
+              />
+            </div>
+          </div>
         )}
 
         {tag.children?.length > 0 && (

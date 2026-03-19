@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -22,10 +23,30 @@ function preprocessObsidianImages(text: string): string {
   });
 }
 
+/** Obsidian 笔记双链 [[页面]] 或 [[页面|显示名]] → 加粗显示（避免整段裸链） */
+function preprocessWikiLinks(text: string): string {
+  return text.replace(
+    /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
+    (_m, page: string, alias?: string) => {
+      const label = (alias ?? page).trim() || page;
+      return `**${label}**`;
+    }
+  );
+}
+
+function preprocessMarkdown(text: string): string {
+  return preprocessWikiLinks(preprocessObsidianImages(text));
+}
+
 export function MathRenderer({ content, className }: MathRendererProps) {
-  const processedContent = preprocessObsidianImages(content);
+  const processedContent = preprocessMarkdown(content);
   return (
-    <div className={`prose prose-sm max-w-none dark:prose-invert ${className ?? ""}`}>
+    <div
+      className={cn(
+        "prose prose-sm max-w-none dark:prose-invert",
+        className
+      )}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[rehypeKatex]}
