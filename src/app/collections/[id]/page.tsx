@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
+import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
 import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown } from "lucide-react";
 import type { TagType } from "@/types";
 
@@ -490,6 +491,14 @@ export default function CollectionDetailPage() {
           onChange={(e) => setIntroContent(e.target.value)}
           placeholder="这里可编辑导学内容；导出时将作为讲义第一部分"
         />
+        <div className="rounded border bg-muted/20 p-3">
+          <div className="text-xs font-medium text-muted-foreground mb-2">
+            导学内容预览（Markdown + 公式）
+          </div>
+          <div className="text-sm">
+            <MathRenderer content={introContent.trim() || "（暂无内容）"} />
+          </div>
+        </div>
       </div>
 
       {loading && (
