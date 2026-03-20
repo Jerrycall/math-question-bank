@@ -33,7 +33,9 @@ function decodeBase64Utf8(value?: string): string {
 }
 
 function isHtmlLike(s: string): boolean {
-  return /<\s*[a-z][\s\S]*>/i.test(s);
+  return /<\/?(p|h[1-6]|ul|ol|li|strong|em|blockquote|pre|code|div|span|table|thead|tbody|tr|th|td|img|a|br|hr)(\s[^>]*)?>/i.test(
+    s
+  );
 }
 
 function toIntroHtml(raw: string): string {

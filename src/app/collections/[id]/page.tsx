@@ -35,7 +35,9 @@ type IntroTag = {
 };
 
 function isHtmlLike(s: string): boolean {
-  return /<\s*[a-z][\s\S]*>/i.test(s);
+  return /<\/?(p|h[1-6]|ul|ol|li|strong|em|blockquote|pre|code|div|span|table|thead|tbody|tr|th|td|img|a|br|hr)(\s[^>]*)?>/i.test(
+    s
+  );
 }
 
 function toRichHtml(raw: string): string {
@@ -60,6 +62,7 @@ export default function CollectionDetailPage() {
   );
   const [introTags, setIntroTags] = useState<IntroTag[]>([]);
   const [selectedIntroTagIds, setSelectedIntroTagIds] = useState<string[]>([]);
+  const [introTagKeyword, setIntroTagKeyword] = useState("");
   const [introTitle, setIntroTitle] = useState("导学：知识点与方法");
   const [introContent, setIntroContent] = useState("");
   const [introSavedAt, setIntroSavedAt] = useState<string>("");
@@ -80,9 +83,11 @@ export default function CollectionDetailPage() {
         : [];
       setIntroTags(list.filter((t) => t.id && t.name));
       setSelectedIntroTagIds([]);
+      setIntroTagKeyword("");
     } catch {
       setIntroTags([]);
       setSelectedIntroTagIds([]);
+      setIntroTagKeyword("");
     }
   }
 
@@ -359,6 +364,12 @@ export default function CollectionDetailPage() {
     );
   }
 
+  const filteredIntroTags = useMemo(() => {
+    const kw = introTagKeyword.trim().toLowerCase();
+    if (!kw) return introTags;
+    return introTags.filter((t) => t.name.toLowerCase().includes(kw));
+  }, [introTags, introTagKeyword]);
+
   async function saveIntro() {
     if (!collectionId) return;
     setBusy("intro-save");
@@ -479,11 +490,17 @@ export default function CollectionDetailPage() {
           ) : null}
         </div>
         <div className="max-h-48 overflow-auto rounded border p-2">
-          {introTags.length === 0 ? (
+          <input
+            className="w-full rounded border border-input bg-background px-2 py-1 text-xs mb-2"
+            value={introTagKeyword}
+            onChange={(e) => setIntroTagKeyword(e.target.value)}
+            placeholder={`检索${introType === "KNOWLEDGE" ? "知识点" : "方法"}（支持模糊匹配）`}
+          />
+          {filteredIntroTags.length === 0 ? (
             <p className="text-xs text-muted-foreground">当前类型暂无可选标签</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {introTags.map((tag) => (
+              {filteredIntroTags.map((tag) => (
                 <label key={tag.id} className="flex items-center gap-2 text-xs">
                   <input
                     type="checkbox"
