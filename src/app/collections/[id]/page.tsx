@@ -384,6 +384,48 @@ export default function CollectionDetailPage() {
     }
   }
 
+  /** 一键删除本题集已保存的导学；导出讲义将不再包含该块 */
+  async function clearIntro() {
+    if (!collectionId) return;
+    if (
+      !confirm(
+        "确定清除本题集的「讲义前置导学」？\n清除并保存后，导出 PDF 将不再包含导学部分，可随时重新编辑保存。"
+      )
+    ) {
+      return;
+    }
+    setBusy("intro-clear");
+    setIntroSavedAt("");
+    try {
+      const res = await fetch(`/api/collections/${collectionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          introType: "",
+          introTitle: "",
+          introContent: "",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.error || "清除导学失败");
+        return;
+      }
+      setIntroContent("");
+      setIntroType("KNOWLEDGE");
+      setIntroTitle("导学：本题集核心知识点");
+      setSelectedIntroTagIds([]);
+      setIntroEditing(false);
+      setIntroSavedAt(new Date().toLocaleTimeString("zh-CN"));
+    } catch (e) {
+      console.error("clearIntro error:", e);
+      alert("清除导学失败");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const title = useMemo(() => "题集详情", []);
 
   return (
@@ -435,7 +477,12 @@ export default function CollectionDetailPage() {
       </div>
 
       <div className="rounded-lg border p-4 space-y-3">
-        <h3 className="text-sm font-semibold">讲义前置导学（导出第一页）</h3>
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">讲义前置导学（导出第一页）</h3>
+          <p className="text-xs text-muted-foreground">
+            不需要导学时，点击下方「清除导学」；或把正文删空后点「保存导学到题集」也可以。
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -466,9 +513,26 @@ export default function CollectionDetailPage() {
             type="button"
             size="sm"
             onClick={() => void saveIntro()}
-            disabled={busy === "intro-save"}
+            disabled={busy === "intro-save" || busy === "intro-clear"}
           >
             {busy === "intro-save" ? "保存中..." : "保存导学到题集"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="text-destructive border-destructive/40 hover:bg-destructive/10"
+            onClick={() => void clearIntro()}
+            disabled={
+              busy === "intro-save" ||
+              busy === "intro-clear" ||
+              (!introContent.trim() &&
+                !collection?.introContent?.trim() &&
+                !collection?.introTitle?.trim() &&
+                !collection?.introType)
+            }
+          >
+            {busy === "intro-clear" ? "清除中…" : "清除导学"}
           </Button>
           {introSavedAt ? (
             <span className="text-xs text-muted-foreground">已保存：{introSavedAt}</span>
