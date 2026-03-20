@@ -307,11 +307,37 @@ export default function CollectionDetailPage() {
 
   function fillIntroFromSelectedTags() {
     const selected = introTags.filter((t) => selectedIntroTagIds.includes(t.id));
+    const sectionTitle = introType === "KNOWLEDGE" ? "知识点导学" : "方法导学";
+    const summaryLine =
+      introType === "KNOWLEDGE"
+        ? "本节先梳理核心知识点，再通过题目训练巩固。"
+        : "本节先明确解题方法，再通过题目训练形成稳定套路。";
     const blocks = selected.map((t, idx) => {
       const desc = (t.description || "").trim() || "（暂无说明）";
-      return `### ${idx + 1}. ${t.name}\n${desc}`;
+      return [
+        `### ${idx + 1}. ${t.name}`,
+        "",
+        `**核心说明**`,
+        "",
+        desc,
+        "",
+        `**应用提醒**`,
+        "",
+        "- 先识别题型与条件，再选择对应思路。",
+        "- 计算前先写关键关系式，避免盲算。",
+      ].join("\n");
     });
-    setIntroContent(blocks.join("\n\n"));
+    setIntroContent(
+      [
+        `## ${sectionTitle}`,
+        "",
+        summaryLine,
+        "",
+        "---",
+        "",
+        ...blocks,
+      ].join("\n")
+    );
   }
 
   async function saveIntro() {
