@@ -49,7 +49,13 @@ function isHtmlLike(s: string): boolean {
 }
 
 function toRichHtml(raw: string): string {
-  const src = (raw || "").trim();
+  const src = (raw || "")
+    .replace(/\\\$/g, "$")
+    .replace(/\\\[/g, "[")
+    .replace(/\\\]/g, "]")
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .trim();
   if (!src) return "";
   if (isHtmlLike(src)) return src;
   return marked.parse(src, { gfm: true, breaks: true }) as string;
