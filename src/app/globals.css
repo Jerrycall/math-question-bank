@@ -117,8 +117,24 @@
     display: none !important;
   }
 
+  /* 避免 min-h-screen + main flex-1 在打印时撑满视口，导致第一页空白或导学被整体挤到下一页 */
+  body > div.min-h-screen {
+    min-height: 0 !important;
+    height: auto !important;
+    display: block !important;
+  }
+
   main {
     max-width: none !important;
     padding: 0 !important;
+    flex: none !important;
+    flex-grow: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    display: block !important;
+  }
+
+  body {
+    background: #fff !important;
   }
 }

@@ -167,8 +167,9 @@
   border-left: 4px solid #2563eb;
   border-radius: 10px;
   background: #eff6ff;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  /* 长导学会跨页：勿对整段 avoid，否则浏览器会把整块挪到下一页，第一页只剩文档头、像空白 */
+  break-inside: auto;
+  page-break-inside: auto;
 }
 
 .introTitle {
@@ -176,6 +177,9 @@
   font-size: 1rem;
   font-weight: 800;
   color: #1e3a8a;
+  /* 标题尽量与紧随的正文同页 */
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .introBody {
