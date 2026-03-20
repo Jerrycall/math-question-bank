@@ -3,22 +3,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
-import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown } from "lucide-react";
+import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
+import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown, Pencil, Check } from "lucide-react";
 import type { TagType } from "@/types";
-import { marked } from "marked";
-import markedKatex from "marked-katex-extension";
-
-const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
-
-marked.use(
-  markedKatex({
-    throwOnError: false,
-    nonStandard: true,
-  })
-);
 
 type CollectionQuestionResponse = {
   collection: {
@@ -42,25 +31,6 @@ type IntroTag = {
   description?: string | null;
 };
 
-function isHtmlLike(s: string): boolean {
-  return /<\/?(p|h[1-6]|ul|ol|li|strong|em|blockquote|pre|code|div|span|table|thead|tbody|tr|th|td|img|a|br|hr)(\s[^>]*)?>/i.test(
-    s
-  );
-}
-
-function toRichHtml(raw: string): string {
-  const src = (raw || "")
-    .replace(/\\\$/g, "$")
-    .replace(/\\\[/g, "[")
-    .replace(/\\\]/g, "]")
-    .replace(/\\\(/g, "(")
-    .replace(/\\\)/g, ")")
-    .trim();
-  if (!src) return "";
-  if (isHtmlLike(src)) return src;
-  return marked.parse(src, { gfm: true, breaks: true }) as string;
-}
-
 export default function CollectionDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -80,6 +50,7 @@ export default function CollectionDetailPage() {
   const [introTitle, setIntroTitle] = useState("导学：知识点与方法");
   const [introContent, setIntroContent] = useState("");
   const [introSavedAt, setIntroSavedAt] = useState<string>("");
+  const [introEditing, setIntroEditing] = useState(false);
   const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
   const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
 
@@ -140,7 +111,7 @@ export default function CollectionDetailPage() {
             : "导学：本题集核心方法"
         );
         setIntroContent(
-          typeof c.introContent === "string" ? toRichHtml(c.introContent) : ""
+          typeof c.introContent === "string" ? c.introContent : ""
         );
       }
     } catch (e) {
@@ -364,7 +335,6 @@ export default function CollectionDetailPage() {
       ].join("\n");
     });
     setIntroContent(
-      toRichHtml(
       [
         `## ${sectionTitle}`,
         "",
@@ -374,7 +344,6 @@ export default function CollectionDetailPage() {
         "",
         ...blocks,
       ].join("\n")
-      )
     );
   }
 
@@ -534,13 +503,51 @@ export default function CollectionDetailPage() {
           onChange={(e) => setIntroTitle(e.target.value)}
           placeholder="导学标题（导出后显示在最前）"
         />
-        <div className="rounded border border-input bg-background">
-          <ReactQuill
-            theme="snow"
-            value={introContent}
-            onChange={setIntroContent}
-            placeholder="这里可编辑导学内容；导出时将作为讲义第一部分"
-          />
+        <div className="rounded border border-input bg-background overflow-hidden">
+          {introEditing ? (
+            <div className="relative">
+              <textarea
+                className="w-full min-h-64 px-3 py-2 text-sm font-mono bg-background resize-y focus:outline-none"
+                value={introContent}
+                onChange={(e) => setIntroContent(e.target.value)}
+                placeholder="在此输入 Markdown 内容，支持 $公式$、**加粗**、## 标题、- 列表等"
+                autoFocus
+              />
+              <div className="flex justify-end px-3 pb-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setIntroEditing(false)}
+                  className="gap-1.5"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  完成编辑
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="relative group min-h-16">
+              {introContent.trim() ? (
+                <div className="px-3 py-3 text-sm">
+                  <MathRenderer content={introContent} />
+                </div>
+              ) : (
+                <p className="px-3 py-3 text-sm text-muted-foreground italic">
+                  暂无导学内容，点击右上角"编辑"添加（支持 Markdown 与数学公式）
+                </p>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setIntroEditing(true)}
+                className="absolute top-2 right-2 gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                编辑
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

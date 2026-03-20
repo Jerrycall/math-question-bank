@@ -8,16 +8,8 @@ import { DIFFICULTY_LABELS, type Difficulty } from "@/types";
 import { PrintButton } from "./PrintButton";
 import styles from "./print.module.css";
 import { cn } from "@/lib/utils";
-import { marked } from "marked";
-import markedKatex from "marked-katex-extension";
 
 export const dynamic = "force-dynamic";
-marked.use(
-  markedKatex({
-    throwOnError: false,
-    nonStandard: true,
-  })
-);
 
 type PrintRow = {
   id: string;
@@ -38,25 +30,6 @@ function decodeBase64Utf8(value?: string): string {
   } catch {
     return "";
   }
-}
-
-function isHtmlLike(s: string): boolean {
-  return /<\/?(p|h[1-6]|ul|ol|li|strong|em|blockquote|pre|code|div|span|table|thead|tbody|tr|th|td|img|a|br|hr)(\s[^>]*)?>/i.test(
-    s
-  );
-}
-
-function toIntroHtml(raw: string): string {
-  const src = (raw || "")
-    .replace(/\\\$/g, "$")
-    .replace(/\\\[/g, "[")
-    .replace(/\\\]/g, "]")
-    .replace(/\\\(/g, "(")
-    .replace(/\\\)/g, ")")
-    .trim();
-  if (!src) return "";
-  if (isHtmlLike(src)) return src;
-  return marked.parse(src, { gfm: true, breaks: true }) as string;
 }
 
 /** 浏览器「另存为 PDF」默认文件名通常取自 document.title，需去掉文件名非法字符 */
@@ -155,7 +128,6 @@ export default async function PrintPage({
   const introTitle =
     (introTitleFromQuery || collection.introTitle || "").trim() || "导学";
   const introContent = (introContentFromQuery || collection.introContent || "").trim();
-  const introHtml = toIntroHtml(introContent);
 
   const rows: PrintRow[] = collection.questions.map((cq) => ({
     pageBreakBefore: cq.pageBreakBefore,
@@ -187,10 +159,12 @@ export default async function PrintPage({
         </div>
       </header>
 
-      {introHtml ? (
+      {introContent ? (
         <section className={styles.introSection}>
           <h2 className={styles.introTitle}>{introTitle}</h2>
-          <div className={styles.introBody} dangerouslySetInnerHTML={{ __html: introHtml }} />
+          <div className={styles.introBody}>
+            <MathRenderer content={introContent} />
+          </div>
         </section>
       ) : null}
 
