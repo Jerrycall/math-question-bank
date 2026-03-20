@@ -3,11 +3,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
-import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
 import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown } from "lucide-react";
 import type { TagType } from "@/types";
+import { marked } from "marked";
+
+const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
 
 type CollectionQuestionResponse = {
   collection: {
@@ -30,6 +33,17 @@ type IntroTag = {
   name: string;
   description?: string | null;
 };
+
+function isHtmlLike(s: string): boolean {
+  return /<\s*[a-z][\s\S]*>/i.test(s);
+}
+
+function toRichHtml(raw: string): string {
+  const src = (raw || "").trim();
+  if (!src) return "";
+  if (isHtmlLike(src)) return src;
+  return marked.parse(src) as string;
+}
 
 export default function CollectionDetailPage() {
   const router = useRouter();
@@ -106,7 +120,9 @@ export default function CollectionDetailPage() {
             ? "导学：本题集核心知识点"
             : "导学：本题集核心方法"
         );
-        setIntroContent(typeof c.introContent === "string" ? c.introContent : "");
+        setIntroContent(
+          typeof c.introContent === "string" ? toRichHtml(c.introContent) : ""
+        );
       }
     } catch (e) {
       console.error("load collection detail error:", e);
@@ -329,6 +345,7 @@ export default function CollectionDetailPage() {
       ].join("\n");
     });
     setIntroContent(
+      toRichHtml(
       [
         `## ${sectionTitle}`,
         "",
@@ -338,6 +355,7 @@ export default function CollectionDetailPage() {
         "",
         ...blocks,
       ].join("\n")
+      )
     );
   }
 
@@ -485,19 +503,13 @@ export default function CollectionDetailPage() {
           onChange={(e) => setIntroTitle(e.target.value)}
           placeholder="导学标题（导出后显示在最前）"
         />
-        <textarea
-          className="w-full min-h-44 rounded border border-input bg-background px-3 py-2 text-sm"
-          value={introContent}
-          onChange={(e) => setIntroContent(e.target.value)}
-          placeholder="这里可编辑导学内容；导出时将作为讲义第一部分"
-        />
-        <div className="rounded border bg-muted/20 p-3">
-          <div className="text-xs font-medium text-muted-foreground mb-2">
-            导学内容预览（Markdown + 公式）
-          </div>
-          <div className="text-sm">
-            <MathRenderer content={introContent.trim() || "（暂无内容）"} />
-          </div>
+        <div className="rounded border border-input bg-background">
+          <ReactQuill
+            theme="snow"
+            value={introContent}
+            onChange={setIntroContent}
+            placeholder="这里可编辑导学内容；导出时将作为讲义第一部分"
+          />
         </div>
       </div>
 
