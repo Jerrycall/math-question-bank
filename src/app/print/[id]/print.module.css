@@ -160,6 +160,50 @@
   border-radius: 6px;
 }
 
+.knowledgeBox {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e9d5ff;
+  border-left: 4px solid #7c3aed;
+  border-radius: 8px;
+  background: #faf5ff;
+}
+
+.knowledgeTitle {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6d28d9;
+  margin-bottom: 8px;
+}
+
+.knowledgeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledgeItem {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #ede9fe;
+  background: #ffffff;
+}
+
+.knowledgeName {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #4c1d95;
+  margin-bottom: 4px;
+}
+
+.knowledgeDesc {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #334155;
+}
+
 /* 答案 / 解析区块 */
 .answerBox,
 .analysisBox {

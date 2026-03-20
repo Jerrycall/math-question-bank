@@ -30,6 +30,7 @@ export default function CollectionDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [printAnswerSpace, setPrintAnswerSpace] = useState(true);
+  const [printKnowledgeNotes, setPrintKnowledgeNotes] = useState(true);
   const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
   const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
 
@@ -226,6 +227,7 @@ export default function CollectionDetailPage() {
     const qs = new URLSearchParams();
     qs.set("showAnswers", showAnswers ? "1" : "0");
     qs.set("answerSpace", printAnswerSpace ? "1" : "0");
+    qs.set("includeKnowledge", printKnowledgeNotes ? "1" : "0");
     window.open(
       `/print/${collectionId}?${qs.toString()}`,
       "_blank",
@@ -256,6 +258,15 @@ export default function CollectionDetailPage() {
               onChange={(e) => setPrintAnswerSpace(e.target.checked)}
             />
             导出时在每题后附答题区（稿纸线）
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none order-last sm:order-none mr-auto sm:mr-0">
+            <input
+              type="checkbox"
+              className="rounded border-input"
+              checked={printKnowledgeNotes}
+              onChange={(e) => setPrintKnowledgeNotes(e.target.checked)}
+            />
+            导出时在题目前附知识点说明
           </label>
           <div className="flex gap-2 flex-wrap justify-end">
             <Link href={`/collections/new?addTo=${collectionId}`}>

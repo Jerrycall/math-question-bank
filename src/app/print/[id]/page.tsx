@@ -10,6 +10,21 @@ import styles from "./print.module.css";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+type KnowledgeTagRow = {
+  tag: { id: string; name: string; description: string | null };
+};
+type PrintRow = {
+  id: string;
+  slug: string;
+  title: string;
+  content: string;
+  answer: string;
+  analysis: string;
+  difficulty: string;
+  source: string | null;
+  pageBreakBefore: boolean;
+  tags: KnowledgeTagRow[];
+};
 
 /** 浏览器「另存为 PDF」默认文件名通常取自 document.title，需去掉文件名非法字符 */
 function titleForPdfFilename(name: string): string {
@@ -45,7 +60,7 @@ export default async function PrintPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { showAnswers?: string; answerSpace?: string };
+  searchParams?: { showAnswers?: string; answerSpace?: string; includeKnowledge?: string };
 }) {
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (!token) return notFound();
@@ -56,6 +71,7 @@ export default async function PrintPage({
   const collectionId = params.id;
   const showAnswers = (searchParams?.showAnswers ?? "0") === "1";
   const showAnswerSpace = (searchParams?.answerSpace ?? "1") !== "0";
+  const includeKnowledge = (searchParams?.includeKnowledge ?? "1") !== "0";
 
   const collection = await db.collection.findUnique({
     where: { id: collectionId },
@@ -76,6 +92,14 @@ export default async function PrintPage({
               analysis: true,
               difficulty: true,
               source: true,
+              tags: {
+                where: { tag: { type: "KNOWLEDGE" } },
+                include: {
+                  tag: {
+                    select: { id: true, name: true, description: true },
+                  },
+                },
+              },
             },
           },
         },
@@ -85,7 +109,7 @@ export default async function PrintPage({
 
   if (!collection || collection.accountId !== accountId) return notFound();
 
-  const rows = collection.questions.map((cq) => ({
+  const rows: PrintRow[] = collection.questions.map((cq) => ({
     pageBreakBefore: cq.pageBreakBefore,
     ...cq.question,
   }));
@@ -106,6 +130,9 @@ export default async function PrintPage({
           <span>共 {rows.length} 题</span>
           {showAnswerSpace ? (
             <span className={styles.docBadge}>含手写答题区</span>
+          ) : null}
+          {includeKnowledge ? (
+            <span className={styles.docBadge}>含知识点说明</span>
           ) : null}
         </div>
       </header>
@@ -134,6 +161,24 @@ export default async function PrintPage({
               </div>
 
               <div className={styles.qStem}>
+                {includeKnowledge && q.tags.length > 0 ? (
+                  <section className={styles.knowledgeBox}>
+                    <div className={styles.knowledgeTitle}>相关知识点</div>
+                    <div className={styles.knowledgeList}>
+                      {q.tags.map((qt) => {
+                        const desc = (qt.tag.description || "").trim();
+                        return (
+                          <div key={qt.tag.id || qt.tag.name} className={styles.knowledgeItem}>
+                            <div className={styles.knowledgeName}>{qt.tag.name || "知识点"}</div>
+                            <div className={styles.knowledgeDesc}>
+                              {desc || "（暂无知识点说明）"}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
                 <MathRenderer content={q.content} />
               </div>
 
