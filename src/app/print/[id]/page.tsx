@@ -9,8 +9,16 @@ import { PrintButton } from "./PrintButton";
 import styles from "./print.module.css";
 import { cn } from "@/lib/utils";
 import { marked } from "marked";
+import markedKatex from "marked-katex-extension";
 
 export const dynamic = "force-dynamic";
+marked.use(
+  markedKatex({
+    throwOnError: false,
+    nonStandard: true,
+  })
+);
+
 type PrintRow = {
   id: string;
   slug: string;
@@ -42,7 +50,7 @@ function toIntroHtml(raw: string): string {
   const src = (raw || "").trim();
   if (!src) return "";
   if (isHtmlLike(src)) return src;
-  return marked.parse(src) as string;
+  return marked.parse(src, { gfm: true, breaks: true }) as string;
 }
 
 /** 浏览器「另存为 PDF」默认文件名通常取自 document.title，需去掉文件名非法字符 */

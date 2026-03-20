@@ -9,8 +9,16 @@ import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCa
 import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown } from "lucide-react";
 import type { TagType } from "@/types";
 import { marked } from "marked";
+import markedKatex from "marked-katex-extension";
 
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
+
+marked.use(
+  markedKatex({
+    throwOnError: false,
+    nonStandard: true,
+  })
+);
 
 type CollectionQuestionResponse = {
   collection: {
@@ -44,7 +52,7 @@ function toRichHtml(raw: string): string {
   const src = (raw || "").trim();
   if (!src) return "";
   if (isHtmlLike(src)) return src;
-  return marked.parse(src) as string;
+  return marked.parse(src, { gfm: true, breaks: true }) as string;
 }
 
 export default function CollectionDetailPage() {
