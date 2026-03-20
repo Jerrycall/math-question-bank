@@ -50,15 +50,23 @@ export async function PATCH(
 
   try {
     const { id: collectionId, qId: questionId } = await params;
-    let body: { pageBreakBefore?: boolean };
+    let body: { pageBreakBefore?: boolean; sortOrder?: number };
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: "请求体无效" }, { status: 400 });
     }
 
-    if (typeof body.pageBreakBefore !== "boolean") {
-      return NextResponse.json({ error: "需要 pageBreakBefore 布尔值" }, { status: 400 });
+    const hasPageBreakBefore = typeof body.pageBreakBefore === "boolean";
+    const hasSortOrder =
+      typeof body.sortOrder === "number" &&
+      Number.isInteger(body.sortOrder) &&
+      body.sortOrder >= 0;
+    if (!hasPageBreakBefore && !hasSortOrder) {
+      return NextResponse.json(
+        { error: "至少需要 pageBreakBefore 或 sortOrder" },
+        { status: 400 }
+      );
     }
 
     const current = await db.collection.findUnique({
@@ -73,10 +81,17 @@ export async function PATCH(
       where: {
         collectionId_questionId: { collectionId, questionId },
       },
-      data: { pageBreakBefore: body.pageBreakBefore },
+      data: {
+        ...(hasPageBreakBefore ? { pageBreakBefore: body.pageBreakBefore } : {}),
+        ...(hasSortOrder ? { sortOrder: body.sortOrder } : {}),
+      },
     });
 
-    return NextResponse.json({ ok: true, pageBreakBefore: updated.pageBreakBefore });
+    return NextResponse.json({
+      ok: true,
+      pageBreakBefore: updated.pageBreakBefore,
+      sortOrder: updated.sortOrder,
+    });
   } catch (e) {
     console.error("[api/collections/[id]/questions/[qId]] PATCH error:", e);
     return NextResponse.json({ error: "更新失败" }, { status: 500 });

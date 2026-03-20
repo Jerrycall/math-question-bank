@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
-import { Loader2, Trash2, ListPlus } from "lucide-react";
+import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown } from "lucide-react";
 
 type CollectionQuestionResponse = {
   collection: {
@@ -13,7 +13,10 @@ type CollectionQuestionResponse = {
     name: string;
     createdAt: string | Date;
     questionsCount: number;
-    questions: (QuestionCardQuestion & { pageBreakBefore?: boolean })[];
+    questions: (QuestionCardQuestion & {
+      sortOrder?: number;
+      pageBreakBefore?: boolean;
+    })[];
   };
 };
 
@@ -27,6 +30,8 @@ export default function CollectionDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [printAnswerSpace, setPrintAnswerSpace] = useState(true);
+  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
+  const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
 
   async function load() {
     if (!collectionId) return;
@@ -121,6 +126,101 @@ export default function CollectionDetailPage() {
     }
   }
 
+  async function moveQuestion(questionId: string, direction: "up" | "down") {
+    if (!collectionId || !collection) return;
+    const idx = collection.questions.findIndex((q) => q.id === questionId);
+    if (idx < 0) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= collection.questions.length) return;
+
+    const current = collection.questions[idx];
+    const target = collection.questions[targetIdx];
+    const currentOrder = current.sortOrder ?? idx * 10;
+    const targetOrder = target.sortOrder ?? targetIdx * 10;
+    setBusy(`mv:${questionId}`);
+    try {
+      const [resA, resB] = await Promise.all([
+        fetch(`/api/collections/${collectionId}/questions/${current.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ sortOrder: targetOrder }),
+        }),
+        fetch(`/api/collections/${collectionId}/questions/${target.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ sortOrder: currentOrder }),
+        }),
+      ]);
+      if (!resA.ok || !resB.ok) {
+        const da = await resA.json().catch(() => ({}));
+        const db = await resB.json().catch(() => ({}));
+        alert(da?.error || db?.error || "调整顺序失败");
+        return;
+      }
+      await load();
+    } catch (e) {
+      console.error("moveQuestion error:", e);
+      alert("调整顺序失败");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function reorderQuestionsByIds(nextIds: string[]) {
+    if (!collectionId || !collection) return;
+    const map = new Map(collection.questions.map((q) => [q.id, q]));
+    const reordered = nextIds
+      .map((id) => map.get(id))
+      .filter((q): q is NonNullable<typeof q> => Boolean(q))
+      .map((q, idx) => ({ ...q, sortOrder: idx }));
+    const prev = collection.questions;
+    setCollection({ ...collection, questions: reordered });
+    setBusy("reorder");
+    try {
+      const res = await fetch(`/api/collections/${collectionId}/questions/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ questionIds: nextIds }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || "保存顺序失败");
+        setCollection({ ...collection, questions: prev });
+      }
+    } catch (e) {
+      console.error("reorderQuestionsByIds error:", e);
+      alert("保存顺序失败");
+      setCollection({ ...collection, questions: prev });
+    } finally {
+      setBusy(null);
+      setDraggingQuestionId(null);
+      setDragOverQuestionId(null);
+    }
+  }
+
+  async function handleDropToQuestion(dropQuestionId: string) {
+    if (!collection || !draggingQuestionId || draggingQuestionId === dropQuestionId) {
+      setDraggingQuestionId(null);
+      setDragOverQuestionId(null);
+      return;
+    }
+    const ids = collection.questions.map((q) => q.id);
+    const from = ids.indexOf(draggingQuestionId);
+    const to = ids.indexOf(dropQuestionId);
+    if (from < 0 || to < 0 || from === to) {
+      setDraggingQuestionId(null);
+      setDragOverQuestionId(null);
+      return;
+    }
+    const nextIds = [...ids];
+    const [moved] = nextIds.splice(from, 1);
+    nextIds.splice(to, 0, moved);
+    await reorderQuestionsByIds(nextIds);
+  }
+
   function exportPdf(showAnswers: boolean) {
     if (!collectionId) return;
     const qs = new URLSearchParams();
@@ -178,6 +278,9 @@ export default function CollectionDetailPage() {
         <p className="text-xs text-muted-foreground max-w-xl">
           每道题右侧可勾选「打印时换页」：导出 PDF 时会在该题<strong>之前</strong>强制分页（第 1 题无效）。适合把大题拆开或留空白页。
         </p>
+        <p className="text-xs text-muted-foreground max-w-xl">
+          支持拖拽排序：按住题卡区域拖到目标位置即可保存；也可使用右侧上移/下移按钮微调。
+        </p>
       </div>
 
       {loading && (
@@ -194,10 +297,31 @@ export default function CollectionDetailPage() {
 
       {!loading && collection && collection.questions.length > 0 && (
         <div className="space-y-4">
-          {collection.questions.map((q) => (
+          {collection.questions.map((q, idx) => (
             <div
               key={q.id}
-              className="flex gap-3 items-start"
+              className={`flex gap-3 items-start rounded-md transition-colors ${
+                dragOverQuestionId === q.id ? "bg-muted/50" : ""
+              }`}
+              draggable={!busy}
+              onDragStart={() => setDraggingQuestionId(q.id)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (draggingQuestionId && draggingQuestionId !== q.id) {
+                  setDragOverQuestionId(q.id);
+                }
+              }}
+              onDragLeave={() => {
+                if (dragOverQuestionId === q.id) setDragOverQuestionId(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                void handleDropToQuestion(q.id);
+              }}
+              onDragEnd={() => {
+                setDraggingQuestionId(null);
+                setDragOverQuestionId(null);
+              }}
             >
               <div className="flex-1 min-w-0">
                 <QuestionCard question={q} compact />
@@ -215,6 +339,26 @@ export default function CollectionDetailPage() {
                   />
                   打印换页
                 </label>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  disabled={idx === 0 || !!busy}
+                  onClick={() => moveQuestion(q.id, "up")}
+                  title="上移"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  disabled={idx === collection.questions.length - 1 || !!busy}
+                  onClick={() => moveQuestion(q.id, "down")}
+                  title="下移"
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </Button>
                 <Button
                   variant="outline"
                   size="icon"

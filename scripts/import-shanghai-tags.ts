@@ -18,6 +18,10 @@ const DEFAULT_ROOT =
   "/Users/zhouzhijie/cursor/流墨轩·AI教研 - 新教研员/数学-高中知识库/03-练习题库/上海高三复习题集";
 
 const ROOT = process.env.SHANGHAI_TAGS_ROOT || DEFAULT_ROOT;
+const STRIP_DATAVIEW = process.env.TAGS_STRIP_DATAVIEW === "1";
+const DESCRIPTION_MAX_LENGTH = Number(
+  process.env.TAGS_DESCRIPTION_MAX_LENGTH || "50000"
+);
 
 const FOLDERS: { subdir: string; type: TagType; label: string }[] = [
   { subdir: "_标签-知识点", type: "KNOWLEDGE", label: "知识点" },
@@ -37,7 +41,7 @@ function slugify(name: string): string {
 }
 
 /**
- * 从 Obsidian 标签页解析展示名与说明（支持 YAML frontmatter 里「标签名」；去掉 dataview）
+ * 从 Obsidian 标签页解析展示名与说明（支持 YAML frontmatter 里「标签名」）
  */
 function parseTagMarkdown(rawFile: string, fileStem: string): {
   name: string;
@@ -65,9 +69,17 @@ function parseTagMarkdown(rawFile: string, fileStem: string): {
     }
   }
 
-  let body = content.replace(/```dataview[\s\S]*?```/gi, "").trim();
+  let body = content.trim();
+  if (STRIP_DATAVIEW) {
+    body = body.replace(/```dataview[\s\S]*?```/gi, "").trim();
+  }
   body = body.replace(/^\s*#+\s+.*$/m, "").trim();
-  const description = body.length > 0 ? body.slice(0, 8000) : null;
+  const description =
+    body.length > 0
+      ? DESCRIPTION_MAX_LENGTH > 0
+        ? body.slice(0, DESCRIPTION_MAX_LENGTH)
+        : body
+      : null;
 
   return { name, description };
 }
@@ -124,14 +136,26 @@ async function importFolder(
     return { ok: 0, skip: 0 };
   }
 
-  const files = readdirSync(absPath)
-    .filter((f) => f.endsWith(".md"))
-    .sort((a, b) => a.localeCompare(b, "zh-CN"));
+  const collectMdFiles = (dir: string): string[] => {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    const result: string[] = [];
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        result.push(...collectMdFiles(full));
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        result.push(full);
+      }
+    }
+    return result;
+  };
+
+  const files = collectMdFiles(absPath).sort((a, b) => a.localeCompare(b, "zh-CN"));
 
   let ok = 0;
   for (let i = 0; i < files.length; i++) {
-    const fp = join(absPath, files[i]);
-    const stem = files[i].replace(/\.md$/i, "");
+    const fp = files[i];
+    const stem = fp.split("/").pop()?.replace(/\.md$/i, "") || "未命名";
     try {
       const raw = readFileSync(fp, "utf-8");
       const { name, description } = parseTagMarkdown(raw, stem);
@@ -147,6 +171,9 @@ async function importFolder(
 
 async function main() {
   console.log(`📂 标签根目录：${ROOT}\n`);
+  console.log(
+    `⚙️ 导入参数：STRIP_DATAVIEW=${STRIP_DATAVIEW ? "1" : "0"}, TAGS_DESCRIPTION_MAX_LENGTH=${DESCRIPTION_MAX_LENGTH}`
+  );
 
   if (!existsSync(ROOT)) {
     console.error(

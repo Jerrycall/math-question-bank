@@ -60,6 +60,7 @@ export async function GET(
         questionsCount: collection._count.questions,
         questions: collection.questions.map((cq) => ({
           ...cq.question,
+          sortOrder: cq.sortOrder,
           pageBreakBefore: cq.pageBreakBefore,
         })),
       },
