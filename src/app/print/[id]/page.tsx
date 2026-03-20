@@ -10,9 +10,6 @@ import styles from "./print.module.css";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-type KnowledgeTagRow = {
-  tag: { id: string; name: string; description: string | null };
-};
 type PrintRow = {
   id: string;
   slug: string;
@@ -23,8 +20,16 @@ type PrintRow = {
   difficulty: string;
   source: string | null;
   pageBreakBefore: boolean;
-  tags: KnowledgeTagRow[];
 };
+
+function decodeBase64Utf8(value?: string): string {
+  if (!value) return "";
+  try {
+    return Buffer.from(value, "base64").toString("utf8");
+  } catch {
+    return "";
+  }
+}
 
 /** 浏览器「另存为 PDF」默认文件名通常取自 document.title，需去掉文件名非法字符 */
 function titleForPdfFilename(name: string): string {
@@ -60,7 +65,13 @@ export default async function PrintPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { showAnswers?: string; answerSpace?: string; includeKnowledge?: string };
+  searchParams?: {
+    showAnswers?: string;
+    answerSpace?: string;
+    introType?: string;
+    introTitleB64?: string;
+    introContentB64?: string;
+  };
 }) {
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (!token) return notFound();
@@ -71,7 +82,11 @@ export default async function PrintPage({
   const collectionId = params.id;
   const showAnswers = (searchParams?.showAnswers ?? "0") === "1";
   const showAnswerSpace = (searchParams?.answerSpace ?? "1") !== "0";
-  const includeKnowledge = (searchParams?.includeKnowledge ?? "1") !== "0";
+  const introTypeRaw = (searchParams?.introType ?? "").toUpperCase();
+  const introTypeFromQuery =
+    introTypeRaw === "METHOD" || introTypeRaw === "KNOWLEDGE" ? introTypeRaw : "";
+  const introTitleFromQuery = decodeBase64Utf8(searchParams?.introTitleB64);
+  const introContentFromQuery = decodeBase64Utf8(searchParams?.introContentB64);
 
   const collection = await db.collection.findUnique({
     where: { id: collectionId },
@@ -79,6 +94,9 @@ export default async function PrintPage({
       id: true,
       name: true,
       accountId: true,
+      introType: true,
+      introTitle: true,
+      introContent: true,
       questions: {
         orderBy: { sortOrder: "asc" },
         include: {
@@ -92,14 +110,6 @@ export default async function PrintPage({
               analysis: true,
               difficulty: true,
               source: true,
-              tags: {
-                where: { tag: { type: "KNOWLEDGE" } },
-                include: {
-                  tag: {
-                    select: { id: true, name: true, description: true },
-                  },
-                },
-              },
             },
           },
         },
@@ -108,6 +118,15 @@ export default async function PrintPage({
   });
 
   if (!collection || collection.accountId !== accountId) return notFound();
+
+  const introTypeSaved =
+    collection.introType === "METHOD" || collection.introType === "KNOWLEDGE"
+      ? collection.introType
+      : "";
+  const introType = introTypeFromQuery || introTypeSaved;
+  const introTitle =
+    (introTitleFromQuery || collection.introTitle || "").trim() || "导学";
+  const introContent = (introContentFromQuery || collection.introContent || "").trim();
 
   const rows: PrintRow[] = collection.questions.map((cq) => ({
     pageBreakBefore: cq.pageBreakBefore,
@@ -131,11 +150,22 @@ export default async function PrintPage({
           {showAnswerSpace ? (
             <span className={styles.docBadge}>含手写答题区</span>
           ) : null}
-          {includeKnowledge ? (
-            <span className={styles.docBadge}>含知识点说明</span>
+          {introContent.trim() ? (
+            <span className={styles.docBadge}>
+              含导学前言{introType ? `（${introType === "KNOWLEDGE" ? "知识点" : "方法"}）` : ""}
+            </span>
           ) : null}
         </div>
       </header>
+
+      {introContent.trim() ? (
+        <section className={styles.introSection}>
+          <h2 className={styles.introTitle}>{introTitle}</h2>
+          <div className={styles.introBody}>
+            <MathRenderer content={introContent} />
+          </div>
+        </section>
+      ) : null}
 
       <div className={styles.qList}>
         {rows.map((q, idx) => {
@@ -161,24 +191,6 @@ export default async function PrintPage({
               </div>
 
               <div className={styles.qStem}>
-                {includeKnowledge && q.tags.length > 0 ? (
-                  <section className={styles.knowledgeBox}>
-                    <div className={styles.knowledgeTitle}>相关知识点</div>
-                    <div className={styles.knowledgeList}>
-                      {q.tags.map((qt) => {
-                        const desc = (qt.tag.description || "").trim();
-                        return (
-                          <div key={qt.tag.id || qt.tag.name} className={styles.knowledgeItem}>
-                            <div className={styles.knowledgeName}>{qt.tag.name || "知识点"}</div>
-                            <div className={styles.knowledgeDesc}>
-                              {desc || "（暂无知识点说明）"}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ) : null}
                 <MathRenderer content={q.content} />
               </div>
 

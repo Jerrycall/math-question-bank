@@ -55,6 +55,9 @@ export async function GET(
       collection: {
         id: collection.id,
         name: collection.name,
+        introType: collection.introType,
+        introTitle: collection.introTitle,
+        introContent: collection.introContent,
         accountId: collection.accountId,
         createdAt: collection.createdAt,
         questionsCount: collection._count.questions,
@@ -69,7 +72,7 @@ export async function GET(
     console.error("[api/collections/[id]] GET error:", e);
     const msg = e instanceof Error ? e.message : String(e);
     const likelySchema =
-      /pageBreakBefore|column|does not exist|42703/i.test(msg);
+      /pageBreakBefore|introType|introTitle|introContent|column|does not exist|42703/i.test(msg);
     return NextResponse.json(
       {
         error: likelySchema
@@ -93,9 +96,12 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const name = String(body?.name ?? "").trim();
-    if (!name || name.length > 50) {
-      return NextResponse.json({ error: "题集名称不合法" }, { status: 400 });
+    const hasName = typeof body?.name === "string";
+    const hasIntroType = typeof body?.introType === "string";
+    const hasIntroTitle = typeof body?.introTitle === "string";
+    const hasIntroContent = typeof body?.introContent === "string";
+    if (!hasName && !hasIntroType && !hasIntroTitle && !hasIntroContent) {
+      return NextResponse.json({ error: "缺少可更新字段" }, { status: 400 });
     }
 
     const current = await db.collection.findUnique({
@@ -106,9 +112,38 @@ export async function PATCH(
       return NextResponse.json({ error: "无权限" }, { status: 403 });
     }
 
+    const updateData: {
+      name?: string;
+      introType?: string | null;
+      introTitle?: string | null;
+      introContent?: string | null;
+    } = {};
+    if (hasName) {
+      const name = String(body?.name ?? "").trim();
+      if (!name || name.length > 50) {
+        return NextResponse.json({ error: "题集名称不合法" }, { status: 400 });
+      }
+      updateData.name = name;
+    }
+    if (hasIntroType) {
+      const introType = String(body?.introType ?? "").trim().toUpperCase();
+      if (introType && introType !== "KNOWLEDGE" && introType !== "METHOD") {
+        return NextResponse.json({ error: "导学类型不合法" }, { status: 400 });
+      }
+      updateData.introType = introType || null;
+    }
+    if (hasIntroTitle) {
+      const introTitle = String(body?.introTitle ?? "").trim();
+      updateData.introTitle = introTitle || null;
+    }
+    if (hasIntroContent) {
+      const introContent = String(body?.introContent ?? "");
+      updateData.introContent = introContent.trim() ? introContent : null;
+    }
+
     const collection = await db.collection.update({
       where: { id },
-      data: { name },
+      data: updateData,
     });
 
     return NextResponse.json({ collection });

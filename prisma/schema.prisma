@@ -83,6 +83,9 @@ model Collection {
   id        String   @id @default(cuid())
   name      String
   accountId String
+  introType String?  // 导学类型：KNOWLEDGE / METHOD
+  introTitle String? @db.Text // 导学标题
+  introContent String? @db.Text // 导学正文（Markdown）
   createdAt DateTime @default(now())
 
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)

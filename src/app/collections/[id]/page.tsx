@@ -6,11 +6,15 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { QuestionCard, type QuestionCardQuestion } from "@/components/QuestionCard";
 import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown } from "lucide-react";
+import type { TagType } from "@/types";
 
 type CollectionQuestionResponse = {
   collection: {
     id: string;
     name: string;
+    introType?: string | null;
+    introTitle?: string | null;
+    introContent?: string | null;
     createdAt: string | Date;
     questionsCount: number;
     questions: (QuestionCardQuestion & {
@@ -18,6 +22,12 @@ type CollectionQuestionResponse = {
       pageBreakBefore?: boolean;
     })[];
   };
+};
+
+type IntroTag = {
+  id: string;
+  name: string;
+  description?: string | null;
 };
 
 export default function CollectionDetailPage() {
@@ -30,9 +40,36 @@ export default function CollectionDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [printAnswerSpace, setPrintAnswerSpace] = useState(true);
-  const [printKnowledgeNotes, setPrintKnowledgeNotes] = useState(true);
+  const [introType, setIntroType] = useState<Extract<TagType, "KNOWLEDGE" | "METHOD">>(
+    "KNOWLEDGE"
+  );
+  const [introTags, setIntroTags] = useState<IntroTag[]>([]);
+  const [selectedIntroTagIds, setSelectedIntroTagIds] = useState<string[]>([]);
+  const [introTitle, setIntroTitle] = useState("导学：知识点与方法");
+  const [introContent, setIntroContent] = useState("");
+  const [introSavedAt, setIntroSavedAt] = useState<string>("");
   const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
   const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
+
+  async function loadIntroTags(type: Extract<TagType, "KNOWLEDGE" | "METHOD">) {
+    try {
+      const res = await fetch(`/api/tags?type=${type}`, { credentials: "include" });
+      const data = await res.json().catch(() => []);
+      const list = Array.isArray(data)
+        ? data.map((t) => ({
+            id: String(t?.id ?? ""),
+            name: String(t?.name ?? ""),
+            description:
+              typeof t?.description === "string" ? t.description : (t?.description ?? null),
+          }))
+        : [];
+      setIntroTags(list.filter((t) => t.id && t.name));
+      setSelectedIntroTagIds([]);
+    } catch {
+      setIntroTags([]);
+      setSelectedIntroTagIds([]);
+    }
+  }
 
   async function load() {
     if (!collectionId) return;
@@ -53,7 +90,23 @@ export default function CollectionDetailPage() {
         setError(data?.error || "加载失败");
         return;
       }
-      setCollection(data?.collection ?? null);
+      const c = data?.collection ?? null;
+      setCollection(c);
+      if (c) {
+        const loadedType =
+          c.introType === "METHOD" || c.introType === "KNOWLEDGE"
+            ? c.introType
+            : "KNOWLEDGE";
+        setIntroType(loadedType);
+        setIntroTitle(
+          typeof c.introTitle === "string" && c.introTitle.trim()
+            ? c.introTitle
+            : loadedType === "KNOWLEDGE"
+            ? "导学：本题集核心知识点"
+            : "导学：本题集核心方法"
+        );
+        setIntroContent(typeof c.introContent === "string" ? c.introContent : "");
+      }
     } catch (e) {
       console.error("load collection detail error:", e);
       setError("网络错误，请刷新重试");
@@ -66,6 +119,11 @@ export default function CollectionDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionId]);
+
+  useEffect(() => {
+    void loadIntroTags(introType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [introType]);
 
   async function setPageBreakBefore(
     questionId: string,
@@ -227,12 +285,62 @@ export default function CollectionDetailPage() {
     const qs = new URLSearchParams();
     qs.set("showAnswers", showAnswers ? "1" : "0");
     qs.set("answerSpace", printAnswerSpace ? "1" : "0");
-    qs.set("includeKnowledge", printKnowledgeNotes ? "1" : "0");
+    if (introContent.trim()) {
+      const introBase64 = btoa(unescape(encodeURIComponent(introContent)));
+      const titleBase64 = btoa(unescape(encodeURIComponent(introTitle.trim() || "导学")));
+      qs.set("introType", introType);
+      qs.set("introTitleB64", titleBase64);
+      qs.set("introContentB64", introBase64);
+    }
     window.open(
       `/print/${collectionId}?${qs.toString()}`,
       "_blank",
       "noopener,noreferrer"
     );
+  }
+
+  function toggleIntroTag(id: string) {
+    setSelectedIntroTagIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function fillIntroFromSelectedTags() {
+    const selected = introTags.filter((t) => selectedIntroTagIds.includes(t.id));
+    const blocks = selected.map((t, idx) => {
+      const desc = (t.description || "").trim() || "（暂无说明）";
+      return `### ${idx + 1}. ${t.name}\n${desc}`;
+    });
+    setIntroContent(blocks.join("\n\n"));
+  }
+
+  async function saveIntro() {
+    if (!collectionId) return;
+    setBusy("intro-save");
+    setIntroSavedAt("");
+    try {
+      const res = await fetch(`/api/collections/${collectionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          introType,
+          introTitle: introTitle.trim(),
+          introContent,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.error || "导学保存失败");
+        return;
+      }
+      setIntroSavedAt(new Date().toLocaleTimeString("zh-CN"));
+    } catch (e) {
+      console.error("saveIntro error:", e);
+      alert("导学保存失败");
+    } finally {
+      setBusy(null);
+    }
   }
 
   const title = useMemo(() => "题集详情", []);
@@ -259,15 +367,6 @@ export default function CollectionDetailPage() {
             />
             导出时在每题后附答题区（稿纸线）
           </label>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none order-last sm:order-none mr-auto sm:mr-0">
-            <input
-              type="checkbox"
-              className="rounded border-input"
-              checked={printKnowledgeNotes}
-              onChange={(e) => setPrintKnowledgeNotes(e.target.checked)}
-            />
-            导出时在题目前附知识点说明
-          </label>
           <div className="flex gap-2 flex-wrap justify-end">
             <Link href={`/collections/new?addTo=${collectionId}`}>
               <Button variant="default" className="gap-1.5">
@@ -292,6 +391,79 @@ export default function CollectionDetailPage() {
         <p className="text-xs text-muted-foreground max-w-xl">
           支持拖拽排序：按住题卡区域拖到目标位置即可保存；也可使用右侧上移/下移按钮微调。
         </p>
+      </div>
+
+      <div className="rounded-lg border p-4 space-y-3">
+        <h3 className="text-sm font-semibold">讲义前置导学（导出第一页）</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={introType === "KNOWLEDGE" ? "default" : "outline"}
+            onClick={() => setIntroType("KNOWLEDGE")}
+          >
+            选择知识点
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={introType === "METHOD" ? "default" : "outline"}
+            onClick={() => setIntroType("METHOD")}
+          >
+            选择方法
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={fillIntroFromSelectedTags}
+            disabled={selectedIntroTagIds.length === 0}
+          >
+            生成到下方可编辑内容
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={saveIntro}
+            disabled={busy === "intro-save"}
+          >
+            {busy === "intro-save" ? "保存中..." : "保存导学到题集"}
+          </Button>
+          {introSavedAt ? (
+            <span className="text-xs text-muted-foreground">已保存：{introSavedAt}</span>
+          ) : null}
+        </div>
+        <div className="max-h-48 overflow-auto rounded border p-2">
+          {introTags.length === 0 ? (
+            <p className="text-xs text-muted-foreground">当前类型暂无可选标签</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {introTags.map((tag) => (
+                <label key={tag.id} className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="rounded border-input"
+                    checked={selectedIntroTagIds.includes(tag.id)}
+                    onChange={() => toggleIntroTag(tag.id)}
+                  />
+                  <span className="truncate">{tag.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <input
+          className="w-full rounded border border-input bg-background px-3 py-2 text-sm"
+          value={introTitle}
+          onChange={(e) => setIntroTitle(e.target.value)}
+          placeholder="导学标题（导出后显示在最前）"
+        />
+        <textarea
+          className="w-full min-h-44 rounded border border-input bg-background px-3 py-2 text-sm"
+          value={introContent}
+          onChange={(e) => setIntroContent(e.target.value)}
+          placeholder="这里可编辑导学内容；导出时将作为讲义第一部分"
+        />
       </div>
 
       {loading && (
