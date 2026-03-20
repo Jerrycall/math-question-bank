@@ -288,18 +288,13 @@ export default function CollectionDetailPage() {
     await reorderQuestionsByIds(nextIds);
   }
 
-  function exportPdf(showAnswers: boolean) {
+  async function exportPdf(showAnswers: boolean) {
     if (!collectionId) return;
+    const saved = await saveIntro({ silentSuccess: true });
+    if (!saved) return;
     const qs = new URLSearchParams();
     qs.set("showAnswers", showAnswers ? "1" : "0");
     qs.set("answerSpace", printAnswerSpace ? "1" : "0");
-    if (introContent.trim()) {
-      const introBase64 = btoa(unescape(encodeURIComponent(introContent)));
-      const titleBase64 = btoa(unescape(encodeURIComponent(introTitle.trim() || "导学")));
-      qs.set("introType", introType);
-      qs.set("introTitleB64", titleBase64);
-      qs.set("introContentB64", introBase64);
-    }
     window.open(
       `/print/${collectionId}?${qs.toString()}`,
       "_blank",
@@ -354,10 +349,12 @@ export default function CollectionDetailPage() {
     return introTags.filter((t) => t.name.toLowerCase().includes(kw));
   }, [introTags, introTagKeyword]);
 
-  async function saveIntro() {
-    if (!collectionId) return;
+  async function saveIntro(options?: { silentSuccess?: boolean }): Promise<boolean> {
+    if (!collectionId) return false;
     setBusy("intro-save");
-    setIntroSavedAt("");
+    if (!options?.silentSuccess) {
+      setIntroSavedAt("");
+    }
     try {
       const res = await fetch(`/api/collections/${collectionId}`, {
         method: "PATCH",
@@ -372,12 +369,16 @@ export default function CollectionDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         alert(data?.error || "导学保存失败");
-        return;
+        return false;
       }
-      setIntroSavedAt(new Date().toLocaleTimeString("zh-CN"));
+      if (!options?.silentSuccess) {
+        setIntroSavedAt(new Date().toLocaleTimeString("zh-CN"));
+      }
+      return true;
     } catch (e) {
       console.error("saveIntro error:", e);
       alert("导学保存失败");
+      return false;
     } finally {
       setBusy(null);
     }
@@ -464,7 +465,7 @@ export default function CollectionDetailPage() {
           <Button
             type="button"
             size="sm"
-            onClick={saveIntro}
+            onClick={() => void saveIntro()}
             disabled={busy === "intro-save"}
           >
             {busy === "intro-save" ? "保存中..." : "保存导学到题集"}
