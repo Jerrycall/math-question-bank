@@ -34,11 +34,12 @@ function decodeBase64Utf8(value?: string): string {
   }
 }
 
+/** 打印页题块之间的垂直间距（px）。LOOSE 刻意加大，便于留出手写、批改空白 */
 const PRINT_QUESTION_GAP_PX = {
   COMPACT: 10,
-  NORMAL: 20,
-  RELAXED: 36,
-  LOOSE: 56,
+  NORMAL: 22,
+  RELAXED: 48,
+  LOOSE: 140,
 } as const;
 
 type PrintQuestionGapKey = keyof typeof PRINT_QUESTION_GAP_PX;
