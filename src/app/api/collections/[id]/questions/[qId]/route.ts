@@ -50,7 +50,11 @@ export async function PATCH(
 
   try {
     const { id: collectionId, qId: questionId } = await params;
-    let body: { pageBreakBefore?: boolean; sortOrder?: number };
+    let body: {
+      pageBreakBefore?: boolean;
+      sortOrder?: number;
+      printGapAfter?: string | null;
+    };
     try {
       body = await request.json();
     } catch {
@@ -62,11 +66,27 @@ export async function PATCH(
       typeof body.sortOrder === "number" &&
       Number.isInteger(body.sortOrder) &&
       body.sortOrder >= 0;
-    if (!hasPageBreakBefore && !hasSortOrder) {
+    const hasPrintGapAfter = "printGapAfter" in body;
+    if (!hasPageBreakBefore && !hasSortOrder && !hasPrintGapAfter) {
       return NextResponse.json(
-        { error: "至少需要 pageBreakBefore 或 sortOrder" },
+        { error: "至少需要 pageBreakBefore、sortOrder 或 printGapAfter" },
         { status: 400 }
       );
+    }
+
+    let printGapAfterUpdate: string | null | undefined = undefined;
+    if (hasPrintGapAfter) {
+      const v = body.printGapAfter;
+      if (v === null || v === undefined || (typeof v === "string" && !v.trim())) {
+        printGapAfterUpdate = null;
+      } else {
+        const g = String(v).trim().toUpperCase();
+        const allowed = new Set(["COMPACT", "NORMAL", "RELAXED", "LOOSE"]);
+        if (!allowed.has(g)) {
+          return NextResponse.json({ error: "题间距取值不合法" }, { status: 400 });
+        }
+        printGapAfterUpdate = g;
+      }
     }
 
     const current = await db.collection.findUnique({
@@ -84,6 +104,7 @@ export async function PATCH(
       data: {
         ...(hasPageBreakBefore ? { pageBreakBefore: body.pageBreakBefore } : {}),
         ...(hasSortOrder ? { sortOrder: body.sortOrder } : {}),
+        ...(hasPrintGapAfter ? { printGapAfter: printGapAfterUpdate } : {}),
       },
     });
 
@@ -91,6 +112,7 @@ export async function PATCH(
       ok: true,
       pageBreakBefore: updated.pageBreakBefore,
       sortOrder: updated.sortOrder,
+      printGapAfter: updated.printGapAfter,
     });
   } catch (e) {
     console.error("[api/collections/[id]/questions/[qId]] PATCH error:", e);

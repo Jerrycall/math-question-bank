@@ -61,10 +61,12 @@ export async function GET(
         accountId: collection.accountId,
         createdAt: collection.createdAt,
         questionsCount: collection._count.questions,
+        printQuestionGap: collection.printQuestionGap,
         questions: collection.questions.map((cq) => ({
           ...cq.question,
           sortOrder: cq.sortOrder,
           pageBreakBefore: cq.pageBreakBefore,
+          printGapAfter: cq.printGapAfter,
         })),
       },
     });
@@ -72,7 +74,7 @@ export async function GET(
     console.error("[api/collections/[id]] GET error:", e);
     const msg = e instanceof Error ? e.message : String(e);
     const likelySchema =
-      /pageBreakBefore|introType|introTitle|introContent|printQuestionGap|column|does not exist|42703/i.test(msg);
+      /pageBreakBefore|printGapAfter|introType|introTitle|introContent|printQuestionGap|column|does not exist|42703/i.test(msg);
     return NextResponse.json(
       {
         error: likelySchema

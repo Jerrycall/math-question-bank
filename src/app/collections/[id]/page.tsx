@@ -24,6 +24,7 @@ type CollectionQuestionResponse = {
     questions: (QuestionCardQuestion & {
       sortOrder?: number;
       pageBreakBefore?: boolean;
+      printGapAfter?: string | null;
     })[];
   };
 };
@@ -175,6 +176,54 @@ export default function CollectionDetailPage() {
     } catch (e) {
       console.error("setPageBreakBefore error:", e);
       alert("更新失败");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function printGapSelectValue(v: string | null | undefined): string {
+    if (v == null || v === "") return "";
+    const u = v.toUpperCase();
+    if (u === "COMPACT" || u === "NORMAL" || u === "RELAXED" || u === "LOOSE") {
+      return u;
+    }
+    return "";
+  }
+
+  async function setQuestionPrintGapAfter(questionId: string, value: string) {
+    if (!collectionId) return;
+    setBusy(`gap:${questionId}`);
+    try {
+      const body =
+        value === "" ? { printGapAfter: null } : { printGapAfter: value };
+      const res = await fetch(
+        `/api/collections/${collectionId}/questions/${questionId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.error || "更新间距失败");
+        return;
+      }
+      const nextGap: string | null =
+        value === "" ? null : value.toUpperCase();
+      setCollection((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          questions: prev.questions.map((q) =>
+            q.id === questionId ? { ...q, printGapAfter: nextGap } : q
+          ),
+        };
+      });
+    } catch (e) {
+      console.error("setQuestionPrintGapAfter error:", e);
+      alert("更新间距失败");
     } finally {
       setBusy(null);
     }
@@ -519,7 +568,7 @@ export default function CollectionDetailPage() {
               导出时在每题后附答题区（稿纸线）
             </label>
             <label className="flex items-center gap-2 text-muted-foreground">
-              <span className="shrink-0">题间间距</span>
+              <span className="shrink-0">默认题间间距</span>
               <select
                 className="rounded border border-input bg-background px-2 py-1.5 text-sm text-foreground min-w-[7rem]"
                 value={printQuestionGap}
@@ -527,7 +576,7 @@ export default function CollectionDetailPage() {
                 onChange={(e) =>
                   void persistPrintQuestionGap(e.target.value as PrintQuestionGapPreset)
                 }
-                title="导出 PDF / 打印时，题目与题目之间的垂直间距"
+                title="未在单题下单独设置时，相邻两题之间的垂直间距；可在每题卡片下「与下一题间距」覆盖"
               >
                 <option value="COMPACT">紧凑</option>
                 <option value="NORMAL">默认</option>
@@ -565,6 +614,7 @@ export default function CollectionDetailPage() {
         </div>
         <p className="text-xs text-muted-foreground max-w-xl">
           每道题右侧可勾选「打印时换页」：导出 PDF 时会在该题<strong>之前</strong>强制分页（第 1 题无效）。适合把大题拆开或留空白页。
+          每两题之间的竖直间距：顶部「默认题间间距」可统一设置；也可在题目卡片下方「与下一题间距」对<strong>相邻两题</strong>单独设置（末题无此项）。
         </p>
         <p className="text-xs text-muted-foreground max-w-xl">
           支持拖拽排序：按住题卡区域拖到目标位置即可保存；也可使用右侧上移/下移按钮微调。
@@ -750,8 +800,30 @@ export default function CollectionDetailPage() {
                 setDragOverQuestionId(null);
               }}
             >
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 space-y-2">
                 <QuestionCard question={q} compact />
+                {idx < collection.questions.length - 1 ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pl-0.5">
+                    <span className="shrink-0">
+                      与第 {idx + 2} 题间距
+                    </span>
+                    <select
+                      className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground min-w-[6.5rem]"
+                      value={printGapSelectValue(q.printGapAfter)}
+                      disabled={!!busy}
+                      title="仅影响本题与下一题之间；选「跟随默认」则用上方默认题间间距"
+                      onChange={(e) =>
+                        void setQuestionPrintGapAfter(q.id, e.target.value)
+                      }
+                    >
+                      <option value="">跟随默认</option>
+                      <option value="COMPACT">紧凑</option>
+                      <option value="NORMAL">默认</option>
+                      <option value="RELAXED">宽松</option>
+                      <option value="LOOSE">很宽</option>
+                    </select>
+                  </div>
+                ) : null}
               </div>
               <div className="shrink-0 pt-2 flex flex-col gap-2 items-end">
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">

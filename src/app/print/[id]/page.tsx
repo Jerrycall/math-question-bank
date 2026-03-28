@@ -21,6 +21,8 @@ type PrintRow = {
   difficulty: string;
   source: string | null;
   pageBreakBefore: boolean;
+  /** 本题与下一题之间；null 则用题集默认 */
+  printGapAfter: string | null;
 };
 
 function decodeBase64Utf8(value?: string): string {
@@ -119,7 +121,9 @@ export default async function PrintPage({
       printQuestionGap: true,
       questions: {
         orderBy: { sortOrder: "asc" },
-        include: {
+        select: {
+          pageBreakBefore: true,
+          printGapAfter: true,
           question: {
             select: {
               id: true,
@@ -148,15 +152,24 @@ export default async function PrintPage({
     (introTitleFromQuery || collection.introTitle || "").trim() || "导学";
   const introContent = (introContentFromQuery || collection.introContent || "").trim();
 
-  const questionGapKey = parsePrintQuestionGap(
+  const defaultGapKey = parsePrintQuestionGap(
     searchParams?.qGap ?? collection.printQuestionGap
   );
-  const questionGapPx = PRINT_QUESTION_GAP_PX[questionGapKey];
 
   const rows: PrintRow[] = collection.questions.map((cq) => ({
-    pageBreakBefore: cq.pageBreakBefore,
     ...cq.question,
+    pageBreakBefore: cq.pageBreakBefore,
+    printGapAfter: cq.printGapAfter ?? null,
   }));
+
+  function marginBottomAfterQuestion(idx: number): number {
+    if (idx >= rows.length - 1) return 0;
+    const row = rows[idx];
+    const key = row.printGapAfter
+      ? parsePrintQuestionGap(row.printGapAfter)
+      : defaultGapKey;
+    return PRINT_QUESTION_GAP_PX[key];
+  }
 
   return (
     <div className={styles.page}>
@@ -192,7 +205,7 @@ export default async function PrintPage({
         </section>
       ) : null}
 
-      <div className={styles.qList} style={{ gap: `${questionGapPx}px` }}>
+      <div className={styles.qList} style={{ gap: 0 }}>
         {rows.map((q, idx) => {
           const diffLabel =
             DIFFICULTY_LABELS[q.difficulty as Difficulty] ?? String(q.difficulty);
@@ -201,6 +214,7 @@ export default async function PrintPage({
             <article
               key={q.id}
               className={cn(styles.qBlock, forcePageBreak && styles.pageBreakBefore)}
+              style={{ marginBottom: marginBottomAfterQuestion(idx) }}
             >
               <div className={styles.qHead}>
                 <div className={styles.qNum} aria-hidden>

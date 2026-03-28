@@ -103,6 +103,8 @@ model CollectionQuestion {
   sortOrder       Int      @default(0)
   /// 导出 PDF/打印时：在该题之前强制分页（第一题无效）
   pageBreakBefore Boolean  @default(false)
+  /// 本题与下一题之间的间距；null 表示使用题集默认 printQuestionGap
+  printGapAfter   String?
   addedAt         DateTime @default(now())
 
   collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
