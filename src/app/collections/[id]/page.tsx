@@ -384,6 +384,37 @@ export default function CollectionDetailPage() {
     }
   }
 
+  /** 删除整个题集（仅删除题集与组卷关系，题库里的题目仍保留） */
+  async function deleteCollection() {
+    if (!collectionId || !collection) return;
+    const name = collection.name.trim() || "此题集";
+    if (
+      !confirm(
+        `确定删除题集「${name}」？\n删除后无法恢复；题库中的题目不会被删除，只是不再出现在本题集里。`
+      )
+    ) {
+      return;
+    }
+    setBusy("delete-collection");
+    try {
+      const res = await fetch(`/api/collections/${collectionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.error || "删除题集失败");
+        return;
+      }
+      router.push("/collections");
+    } catch (e) {
+      console.error("deleteCollection error:", e);
+      alert("删除题集失败");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   /** 一键删除本题集已保存的导学；导出讲义将不再包含该块 */
   async function clearIntro() {
     if (!collectionId) return;
@@ -460,6 +491,15 @@ export default function CollectionDetailPage() {
             <Link href="/collections">
               <Button variant="outline">返回题集列表</Button>
             </Link>
+            <Button
+              type="button"
+              variant="outline"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              disabled={!!busy || !collection}
+              onClick={() => void deleteCollection()}
+            >
+              {busy === "delete-collection" ? "删除中…" : "删除题集"}
+            </Button>
             <Button onClick={() => exportPdf(false)} variant="secondary">
               导出 PDF（只含题目）
             </Button>
