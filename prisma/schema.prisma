@@ -86,6 +86,8 @@ model Collection {
   introType String?  // 导学类型：KNOWLEDGE / METHOD
   introTitle String? @db.Text // 导学标题
   introContent String? @db.Text // 导学正文（Markdown）
+  /// 导出 PDF/打印时题目与题目之间的间距：COMPACT | NORMAL | RELAXED | LOOSE
+  printQuestionGap String @default("NORMAL")
   createdAt DateTime @default(now())
 
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)

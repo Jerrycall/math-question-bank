@@ -67,7 +67,7 @@
   color: #1e40af;
 }
 
-/* 题目块：尽量不分页拆开 */
+/* 题目块：尽量不分页拆开（题间 gap 由页面 inline style 按题集设置覆盖） */
 .qList {
   display: flex;
   flex-direction: column;

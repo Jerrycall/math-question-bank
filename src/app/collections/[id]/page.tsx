@@ -9,6 +9,8 @@ import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
 import { Loader2, Trash2, ListPlus, ArrowUp, ArrowDown } from "lucide-react";
 import type { TagType } from "@/types";
 
+type PrintQuestionGapPreset = "COMPACT" | "NORMAL" | "RELAXED" | "LOOSE";
+
 type CollectionQuestionResponse = {
   collection: {
     id: string;
@@ -16,6 +18,7 @@ type CollectionQuestionResponse = {
     introType?: string | null;
     introTitle?: string | null;
     introContent?: string | null;
+    printQuestionGap?: string | null;
     createdAt: string | Date;
     questionsCount: number;
     questions: (QuestionCardQuestion & {
@@ -41,6 +44,8 @@ export default function CollectionDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [printAnswerSpace, setPrintAnswerSpace] = useState(true);
+  const [printQuestionGap, setPrintQuestionGap] =
+    useState<PrintQuestionGapPreset>("NORMAL");
   const [introType, setIntroType] = useState<Extract<TagType, "KNOWLEDGE" | "METHOD">>(
     "KNOWLEDGE"
   );
@@ -113,6 +118,10 @@ export default function CollectionDetailPage() {
         );
         setIntroContent(
           typeof c.introContent === "string" ? c.introContent : ""
+        );
+        const g = (c.printQuestionGap || "NORMAL").toUpperCase();
+        setPrintQuestionGap(
+          g === "COMPACT" || g === "RELAXED" || g === "LOOSE" ? g : "NORMAL"
         );
       }
     } catch (e) {
@@ -295,6 +304,7 @@ export default function CollectionDetailPage() {
     const qs = new URLSearchParams();
     qs.set("showAnswers", showAnswers ? "1" : "0");
     qs.set("answerSpace", printAnswerSpace ? "1" : "0");
+    qs.set("qGap", printQuestionGap);
     window.open(
       `/print/${collectionId}?${qs.toString()}`,
       "_blank",
@@ -415,6 +425,32 @@ export default function CollectionDetailPage() {
     }
   }
 
+  async function persistPrintQuestionGap(next: PrintQuestionGapPreset) {
+    if (!collectionId) return;
+    setPrintQuestionGap(next);
+    setBusy("print-gap");
+    try {
+      const res = await fetch(`/api/collections/${collectionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ printQuestionGap: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.error || "题间距保存失败");
+        await load();
+        return;
+      }
+    } catch (e) {
+      console.error("persistPrintQuestionGap error:", e);
+      alert("题间距保存失败");
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   /** 一键删除本题集已保存的导学；导出讲义将不再包含该块 */
   async function clearIntro() {
     if (!collectionId) return;
@@ -472,15 +508,34 @@ export default function CollectionDetailPage() {
         </div>
 
         <div className="flex flex-col gap-3 items-end sm:items-stretch sm:flex-row sm:flex-wrap sm:items-center">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none order-last sm:order-none mr-auto sm:mr-0">
-            <input
-              type="checkbox"
-              className="rounded border-input"
-              checked={printAnswerSpace}
-              onChange={(e) => setPrintAnswerSpace(e.target.checked)}
-            />
-            导出时在每题后附答题区（稿纸线）
-          </label>
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 text-sm order-last sm:order-none mr-auto sm:mr-0 w-full sm:w-auto">
+            <label className="flex items-center gap-2 text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="rounded border-input"
+                checked={printAnswerSpace}
+                onChange={(e) => setPrintAnswerSpace(e.target.checked)}
+              />
+              导出时在每题后附答题区（稿纸线）
+            </label>
+            <label className="flex items-center gap-2 text-muted-foreground">
+              <span className="shrink-0">题间间距</span>
+              <select
+                className="rounded border border-input bg-background px-2 py-1.5 text-sm text-foreground min-w-[7rem]"
+                value={printQuestionGap}
+                disabled={busy === "print-gap"}
+                onChange={(e) =>
+                  void persistPrintQuestionGap(e.target.value as PrintQuestionGapPreset)
+                }
+                title="导出 PDF / 打印时，题目与题目之间的垂直间距"
+              >
+                <option value="COMPACT">紧凑</option>
+                <option value="NORMAL">默认</option>
+                <option value="RELAXED">宽松</option>
+                <option value="LOOSE">很宽</option>
+              </select>
+            </label>
+          </div>
           <div className="flex gap-2 flex-wrap justify-end">
             <Link href={`/collections/new?addTo=${collectionId}`}>
               <Button variant="default" className="gap-1.5">

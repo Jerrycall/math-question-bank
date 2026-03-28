@@ -32,6 +32,23 @@ function decodeBase64Utf8(value?: string): string {
   }
 }
 
+const PRINT_QUESTION_GAP_PX = {
+  COMPACT: 10,
+  NORMAL: 20,
+  RELAXED: 36,
+  LOOSE: 56,
+} as const;
+
+type PrintQuestionGapKey = keyof typeof PRINT_QUESTION_GAP_PX;
+
+function parsePrintQuestionGap(raw: string | null | undefined): PrintQuestionGapKey {
+  const u = (raw ?? "").trim().toUpperCase();
+  if (u === "COMPACT" || u === "NORMAL" || u === "RELAXED" || u === "LOOSE") {
+    return u;
+  }
+  return "NORMAL";
+}
+
 /** 浏览器「另存为 PDF」默认文件名通常取自 document.title，需去掉文件名非法字符 */
 function titleForPdfFilename(name: string): string {
   const trimmed = name.trim() || "题集";
@@ -69,6 +86,7 @@ export default async function PrintPage({
   searchParams?: {
     showAnswers?: string;
     answerSpace?: string;
+    qGap?: string;
     introType?: string;
     introTitleB64?: string;
     introContentB64?: string;
@@ -98,6 +116,7 @@ export default async function PrintPage({
       introType: true,
       introTitle: true,
       introContent: true,
+      printQuestionGap: true,
       questions: {
         orderBy: { sortOrder: "asc" },
         include: {
@@ -128,6 +147,11 @@ export default async function PrintPage({
   const introTitle =
     (introTitleFromQuery || collection.introTitle || "").trim() || "导学";
   const introContent = (introContentFromQuery || collection.introContent || "").trim();
+
+  const questionGapKey = parsePrintQuestionGap(
+    searchParams?.qGap ?? collection.printQuestionGap
+  );
+  const questionGapPx = PRINT_QUESTION_GAP_PX[questionGapKey];
 
   const rows: PrintRow[] = collection.questions.map((cq) => ({
     pageBreakBefore: cq.pageBreakBefore,
@@ -168,7 +192,7 @@ export default async function PrintPage({
         </section>
       ) : null}
 
-      <div className={styles.qList}>
+      <div className={styles.qList} style={{ gap: `${questionGapPx}px` }}>
         {rows.map((q, idx) => {
           const diffLabel =
             DIFFICULTY_LABELS[q.difficulty as Difficulty] ?? String(q.difficulty);

@@ -72,7 +72,7 @@ export async function GET(
     console.error("[api/collections/[id]] GET error:", e);
     const msg = e instanceof Error ? e.message : String(e);
     const likelySchema =
-      /pageBreakBefore|introType|introTitle|introContent|column|does not exist|42703/i.test(msg);
+      /pageBreakBefore|introType|introTitle|introContent|printQuestionGap|column|does not exist|42703/i.test(msg);
     return NextResponse.json(
       {
         error: likelySchema
@@ -100,7 +100,14 @@ export async function PATCH(
     const hasIntroType = typeof body?.introType === "string";
     const hasIntroTitle = typeof body?.introTitle === "string";
     const hasIntroContent = typeof body?.introContent === "string";
-    if (!hasName && !hasIntroType && !hasIntroTitle && !hasIntroContent) {
+    const hasPrintQuestionGap = typeof body?.printQuestionGap === "string";
+    if (
+      !hasName &&
+      !hasIntroType &&
+      !hasIntroTitle &&
+      !hasIntroContent &&
+      !hasPrintQuestionGap
+    ) {
       return NextResponse.json({ error: "缺少可更新字段" }, { status: 400 });
     }
 
@@ -117,6 +124,7 @@ export async function PATCH(
       introType?: string | null;
       introTitle?: string | null;
       introContent?: string | null;
+      printQuestionGap?: string;
     } = {};
     if (hasName) {
       const name = String(body?.name ?? "").trim();
@@ -139,6 +147,14 @@ export async function PATCH(
     if (hasIntroContent) {
       const introContent = String(body?.introContent ?? "");
       updateData.introContent = introContent.trim() ? introContent : null;
+    }
+    if (hasPrintQuestionGap) {
+      const g = String(body?.printQuestionGap ?? "").trim().toUpperCase();
+      const allowed = new Set(["COMPACT", "NORMAL", "RELAXED", "LOOSE"]);
+      if (!allowed.has(g)) {
+        return NextResponse.json({ error: "题间距取值不合法" }, { status: 400 });
+      }
+      updateData.printQuestionGap = g;
     }
 
     const collection = await db.collection.update({
