@@ -6,7 +6,7 @@
     "dev": "next dev",
     "start:all": "bash start.sh",
     "postinstall": "prisma generate",
-    "build": "prisma db push --accept-data-loss && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
