@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") ?? "12");
     const skip = (page - 1) * limit;
     const excludeInCollection = searchParams.get("excludeInCollection")?.trim() ?? "";
+    const sourceYearRaw = searchParams.get("sourceYear")?.trim() ?? "";
+    const sourceQ = searchParams.get("sourceQ")?.trim() ?? "";
 
     const where: Record<string, unknown> = {};
 
@@ -60,6 +62,17 @@ export async function GET(request: NextRequest) {
 
     if (difficulty) {
       where.difficulty = difficulty;
+    }
+
+    if (sourceYearRaw) {
+      const y = parseInt(sourceYearRaw, 10);
+      if (!Number.isNaN(y) && y >= 1900 && y <= 2100) {
+        where.sourceYear = y;
+      }
+    }
+
+    if (sourceQ) {
+      where.source = { contains: sourceQ, mode: "insensitive" };
     }
 
     if (q) {

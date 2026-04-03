@@ -5,8 +5,25 @@ import Link from "next/link";
 import { ChevronRight, ChevronDown, Tag as TagIcon, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Tag, TagType, TAG_TYPE_LABELS, TAG_TYPE_COLORS } from "@/types";
+
+/** 按名称筛选标签树（自身或任一子孙匹配则保留该枝） */
+function filterTagTreeByName(roots: Tag[], query: string): Tag[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return roots;
+  const filterNode = (t: Tag): Tag | null => {
+    const kids = t.children ?? [];
+    const filteredKids = kids.map(filterNode).filter(Boolean) as Tag[];
+    const self = t.name.toLowerCase().includes(q);
+    if (self || filteredKids.length > 0) {
+      return { ...t, children: filteredKids };
+    }
+    return null;
+  };
+  return roots.map(filterNode).filter(Boolean) as Tag[];
+}
 
 interface TagTreeNodeProps {
   tag: Tag;
@@ -98,6 +115,8 @@ interface TagBrowserProps {
   selectedIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
   showTypes?: TagType[];
+  /** 在这些类型下显示「名称筛选」输入框（来源标签多时便于查找） */
+  searchFilterTypes?: TagType[];
 }
 
 export function TagBrowser({
@@ -105,7 +124,11 @@ export function TagBrowser({
   selectedIds = [],
   onSelectionChange,
   showTypes = ["KNOWLEDGE", "METHOD", "THOUGHT", "SOURCE"],
+  searchFilterTypes = ["SOURCE"],
 }: TagBrowserProps) {
+  const [typeNameFilter, setTypeNameFilter] = useState<Partial<Record<TagType, string>>>(
+    {}
+  );
   const [internalSelected, setInternalSelected] = useState<string[]>(selectedIds);
   const selected = onSelectionChange ? selectedIds : internalSelected;
   const setSelected = onSelectionChange ?? setInternalSelected;
@@ -171,20 +194,41 @@ export function TagBrowser({
         const typeTags = tagsByType[type];
         if (!typeTags || typeTags.length === 0) return null;
 
+        const filterQ = typeNameFilter[type] ?? "";
+        const displayTags =
+          searchFilterTypes.includes(type) && filterQ.trim()
+            ? filterTagTreeByName(typeTags, filterQ)
+            : typeTags;
+
         return (
           <div key={type}>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-2">
               {TAG_TYPE_LABELS[type]}
             </p>
+            {searchFilterTypes.includes(type) ? (
+              <Input
+                type="search"
+                placeholder={`筛选${TAG_TYPE_LABELS[type]}名称…`}
+                value={filterQ}
+                onChange={(e) =>
+                  setTypeNameFilter((prev) => ({ ...prev, [type]: e.target.value }))
+                }
+                className="mb-2 h-8 text-xs mx-2 w-[calc(100%-1rem)]"
+              />
+            ) : null}
             <div className="space-y-0.5">
-              {typeTags.map((tag) => (
-                <TagTreeNode
-                  key={tag.id}
-                  tag={tag}
-                  selectedIds={selected}
-                  onToggle={handleToggle}
-                />
-              ))}
+              {displayTags.length === 0 ? (
+                <p className="text-xs text-muted-foreground px-2 py-1">无匹配标签</p>
+              ) : (
+                displayTags.map((tag) => (
+                  <TagTreeNode
+                    key={tag.id}
+                    tag={tag}
+                    selectedIds={selected}
+                    onToggle={handleToggle}
+                  />
+                ))
+              )}
             </div>
           </div>
         );

@@ -48,6 +48,21 @@ function NewCollectionPageContent() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sourceYear, setSourceYear] = useState<string>("");
+  const [sourceQ, setSourceQ] = useState("");
+  const [sourceYears, setSourceYears] = useState<number[]>([]);
+
+  const allTagsFlat = useMemo(() => {
+    const out: Tag[] = [];
+    const walk = (ts: Tag[]) => {
+      for (const t of ts) {
+        out.push(t);
+        if (t.children?.length) walk(t.children);
+      }
+    };
+    walk(tags);
+    return out;
+  }, [tags]);
 
   const selectedSet = useMemo(
     () => new Set(orderedSelectedIds),
@@ -121,6 +136,8 @@ function NewCollectionPageContent() {
       const params = new URLSearchParams();
       if (searchQuery) params.set("q", searchQuery);
       if (difficulty) params.set("difficulty", difficulty);
+      if (sourceYear) params.set("sourceYear", sourceYear);
+      if (sourceQ.trim()) params.set("sourceQ", sourceQ.trim());
       selectedTagSlugs.forEach((s) => params.append("tags", s));
       params.set("tagMode", tagMode);
       params.set("page", String(page));
@@ -154,11 +171,20 @@ function NewCollectionPageContent() {
     tagMode,
     page,
     appendTarget?.id,
+    sourceYear,
+    sourceQ,
   ]);
 
   useEffect(() => {
     fetchTags();
   }, [fetchTags]);
+
+  useEffect(() => {
+    fetch("/api/questions/meta")
+      .then((r) => r.json())
+      .then((d) => setSourceYears(Array.isArray(d?.sourceYears) ? d.sourceYears : []))
+      .catch(() => setSourceYears([]));
+  }, []);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -169,9 +195,7 @@ function NewCollectionPageContent() {
 
   const handleTagSelectionChange = (ids: string[]) => {
     setSelectedTagIds(ids);
-    const selectedTags = tags
-      .flatMap((t) => [t, ...(t.children ?? [])])
-      .filter((t) => ids.includes(t.id));
+    const selectedTags = allTagsFlat.filter((t) => ids.includes(t.id));
     setSelectedTagSlugs(selectedTags.map((t) => t.slug));
     setPage(1);
   };
@@ -410,7 +434,9 @@ function NewCollectionPageContent() {
                 <h3 className="font-semibold text-sm">筛选条件</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">与题库页相同</p>
               </div>
-              {selectedTagIds.length > 0 && (
+              {(selectedTagIds.length > 0 ||
+                sourceYear ||
+                sourceQ.trim()) && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -418,6 +444,9 @@ function NewCollectionPageContent() {
                   onClick={() => {
                     setSelectedTagIds([]);
                     setSelectedTagSlugs([]);
+                    setSourceYear("");
+                    setSourceQ("");
+                    setPage(1);
                   }}
                 >
                   清除
@@ -488,11 +517,50 @@ function NewCollectionPageContent() {
               </div>
             </div>
 
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                来源（字段）
+              </p>
+              <div className="space-y-2 px-0.5">
+                <label className="block text-xs text-muted-foreground">
+                  年份
+                  <select
+                    className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                    value={sourceYear}
+                    onChange={(e) => {
+                      setSourceYear(e.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">不限</option>
+                    {sourceYears.map((y) => (
+                      <option key={y} value={String(y)}>
+                        {y} 年
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs text-muted-foreground">
+                  来源文字包含
+                  <Input
+                    placeholder="如：二模、一模…"
+                    value={sourceQ}
+                    onChange={(e) => {
+                      setSourceQ(e.target.value);
+                      setPage(1);
+                    }}
+                    className="mt-1 h-9 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+
             <TagBrowser
               tags={tags}
               selectedIds={selectedTagIds}
               onSelectionChange={handleTagSelectionChange}
-              showTypes={["KNOWLEDGE", "METHOD", "THOUGHT"]}
+              showTypes={["KNOWLEDGE", "METHOD", "THOUGHT", "SOURCE"]}
+              searchFilterTypes={["SOURCE"]}
             />
           </div>
         </aside>

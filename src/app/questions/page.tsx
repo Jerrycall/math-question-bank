@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Filter, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,21 @@ export default function QuestionsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sourceYear, setSourceYear] = useState<string>("");
+  const [sourceQ, setSourceQ] = useState("");
+  const [sourceYears, setSourceYears] = useState<number[]>([]);
+
+  const allTagsFlat = useMemo(() => {
+    const out: Tag[] = [];
+    const walk = (ts: Tag[]) => {
+      for (const t of ts) {
+        out.push(t);
+        if (t.children?.length) walk(t.children);
+      }
+    };
+    walk(tags);
+    return out;
+  }, [tags]);
 
   const fetchTags = useCallback(async () => {
     try {
@@ -41,6 +56,8 @@ export default function QuestionsPage() {
       const params = new URLSearchParams();
       if (searchQuery) params.set("q", searchQuery);
       if (difficulty) params.set("difficulty", difficulty);
+      if (sourceYear) params.set("sourceYear", sourceYear);
+      if (sourceQ.trim()) params.set("sourceQ", sourceQ.trim());
       selectedTagSlugs.forEach((s) => params.append("tags", s));
       params.set("tagMode", tagMode);
       params.set("page", String(page));
@@ -57,11 +74,26 @@ export default function QuestionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, difficulty, selectedTagSlugs, tagMode, page]);
+  }, [
+    searchQuery,
+    difficulty,
+    selectedTagSlugs,
+    tagMode,
+    page,
+    sourceYear,
+    sourceQ,
+  ]);
 
   useEffect(() => {
     fetchTags();
   }, [fetchTags]);
+
+  useEffect(() => {
+    fetch("/api/questions/meta")
+      .then((r) => r.json())
+      .then((d) => setSourceYears(Array.isArray(d?.sourceYears) ? d.sourceYears : []))
+      .catch(() => setSourceYears([]));
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(fetchQuestions, 300);
@@ -70,9 +102,7 @@ export default function QuestionsPage() {
 
   const handleTagSelectionChange = (ids: string[]) => {
     setSelectedTagIds(ids);
-    const selectedTags = tags
-      .flatMap((t) => [t, ...(t.children ?? [])])
-      .filter((t) => ids.includes(t.id));
+    const selectedTags = allTagsFlat.filter((t) => ids.includes(t.id));
     setSelectedTagSlugs(selectedTags.map((t) => t.slug));
     setPage(1);
   };
@@ -101,7 +131,9 @@ export default function QuestionsPage() {
               <h3 className="font-semibold text-sm">筛选条件</h3>
               <p className="text-xs text-muted-foreground mt-0.5">点击选中，再次点击取消</p>
             </div>
-            {selectedTagIds.length > 0 && (
+            {(selectedTagIds.length > 0 ||
+              sourceYear ||
+              sourceQ.trim()) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -109,6 +141,9 @@ export default function QuestionsPage() {
                 onClick={() => {
                   setSelectedTagIds([]);
                   setSelectedTagSlugs([]);
+                  setSourceYear("");
+                  setSourceQ("");
+                  setPage(1);
                 }}
               >
                 清除
@@ -158,14 +193,16 @@ export default function QuestionsPage() {
           )}
 
           {/* 已选条件（在难度上方展示） */}
-          {(selectedTagIds.length > 0 || difficulty) && (
+          {(selectedTagIds.length > 0 ||
+            difficulty ||
+            sourceYear ||
+            sourceQ.trim()) && (
             <div className="mb-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 已选
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {tags
-                  .flatMap((t) => [t, ...(t.children ?? [])])
+                {allTagsFlat
                   .filter((t) => selectedTagIds.includes(t.id))
                   .map((t) => (
                     <Badge
@@ -186,6 +223,16 @@ export default function QuestionsPage() {
                     {DIFFICULTY_LABELS[difficulty]}
                   </Badge>
                 )}
+                {sourceYear ? (
+                  <Badge variant="outline" className="text-xs font-normal cursor-default">
+                    年份 {sourceYear}
+                  </Badge>
+                ) : null}
+                {sourceQ.trim() ? (
+                  <Badge variant="outline" className="text-xs font-normal cursor-default">
+                    来源含「{sourceQ.trim()}」
+                  </Badge>
+                ) : null}
               </div>
             </div>
           )}
@@ -216,12 +263,52 @@ export default function QuestionsPage() {
             </div>
           </div>
 
+          {/* 按题目表字段筛选来源（可与下方来源标签同时使用） */}
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              来源（字段）
+            </p>
+            <div className="space-y-2 px-0.5">
+              <label className="block text-xs text-muted-foreground">
+                年份（sourceYear）
+                <select
+                  className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                  value={sourceYear}
+                  onChange={(e) => {
+                    setSourceYear(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">不限</option>
+                  {sourceYears.map((y) => (
+                    <option key={y} value={String(y)}>
+                      {y} 年
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                来源文字包含
+                <Input
+                  placeholder="如：二模、一模、松江…"
+                  value={sourceQ}
+                  onChange={(e) => {
+                    setSourceQ(e.target.value);
+                    setPage(1);
+                  }}
+                  className="mt-1 h-9 text-sm"
+                />
+              </label>
+            </div>
+          </div>
+
           {/* 标签树 */}
           <TagBrowser
             tags={tags}
             selectedIds={selectedTagIds}
             onSelectionChange={handleTagSelectionChange}
-            showTypes={["KNOWLEDGE", "METHOD", "THOUGHT"]}
+            showTypes={["KNOWLEDGE", "METHOD", "THOUGHT", "SOURCE"]}
+            searchFilterTypes={["SOURCE"]}
           />
         </div>
       </aside>

@@ -93,6 +93,10 @@ async function importOne(filePath: string): Promise<void> {
   if (来源 && String(来源).trim()) {
     tagIds.push(await getOrCreateTag(来源.trim(), "SOURCE"));
   }
+  // 按年份单独打「来源」标签，便于与「来源文字包含」筛选、侧栏点选一致
+  if (typeof 年份 === "number" && 年份 >= 1900 && 年份 <= 2100) {
+    tagIds.push(await getOrCreateTag(`${年份}年`, "SOURCE"));
+  }
   if (题型 && String(题型).trim()) {
     tagIds.push(await getOrCreateTag(`题型：${题型.trim()}`, "SOURCE"));
   }
