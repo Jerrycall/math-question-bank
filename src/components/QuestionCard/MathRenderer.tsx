@@ -34,8 +34,23 @@ function preprocessWikiLinks(text: string): string {
   );
 }
 
+/**
+ * remark-math 在「$$」与公式首段同一行时会把首段吞进 meta；闭合「$$」与末段同一行时可能把后续正文并进公式。
+ * 规范化换行后，\\begin{cases} 等多行块公式才能被 KaTeX 正确解析（如上海题集 D336）。
+ */
+function normalizeDisplayMathFences(text: string): string {
+  let t = text.replace(/(^|\n)(\$\$)\s*([^\n]+)$/gm, (_m, lead, delim, rest: string) => {
+    if (!rest.trim()) return `${lead}${delim}`;
+    return `${lead}${delim}\n${rest}`;
+  });
+  t = t.replace(/^(.*\S)(\$\$\s*)$/gm, "$1\n$2");
+  return t;
+}
+
 function preprocessMarkdown(text: string): string {
-  return preprocessWikiLinks(preprocessObsidianImages(text));
+  return normalizeDisplayMathFences(
+    preprocessWikiLinks(preprocessObsidianImages(text))
+  );
 }
 
 export function MathRenderer({ content, className }: MathRendererProps) {
