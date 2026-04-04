@@ -15,35 +15,92 @@
  *   SYNC_DRY_RUN=1         只打印统计，不写库
  */
 
+import { existsSync, readFileSync } from "fs";
+import { resolve } from "path";
 import { PrismaClient } from "@prisma/client";
 import {
   mergeTargetTagIdIntoCanonical,
   prepareTagUpsertConflictsOnTarget,
 } from "./tag-slug-merge-on-target";
 
-const TARGET_URL = process.env.TARGET_DATABASE_URL;
-if (!TARGET_URL?.trim()) {
+/** npm run 不会自动加载 .env；与 import-shanghai 一致可读 .env / .env.local（终端已 export 的变量优先）。 */
+function loadEnvFilesFromProjectRoot(): void {
+  const merged: Record<string, string> = {};
+  for (const name of [".env", ".env.local"]) {
+    const p = resolve(process.cwd(), name);
+    if (!existsSync(p)) continue;
+    const text = readFileSync(p, "utf8");
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let val = trimmed.slice(eq + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      merged[key] = val;
+    }
+  }
+  for (const [key, val] of Object.entries(merged)) {
+    if (process.env[key] === undefined) process.env[key] = val;
+  }
+}
+
+function dbUrlHostPreview(url: string): string {
+  try {
+    const normalized = url.trim().replace(/^postgresql:/i, "http:");
+    const u = new URL(normalized);
+    const db =
+      u.pathname.replace(/^\//, "").split("?")[0] || "(no db)";
+    return `${u.hostname}:${u.port || "5432"}/${db}`;
+  } catch {
+    return "(无法解析连接串)";
+  }
+}
+
+loadEnvFilesFromProjectRoot();
+
+const TARGET_URL_RAW = process.env.TARGET_DATABASE_URL;
+if (!TARGET_URL_RAW?.trim()) {
   console.error("请设置环境变量 TARGET_DATABASE_URL（Neon 连接串）");
   process.exit(1);
 }
+const TARGET_URL = TARGET_URL_RAW.trim();
 
 const SOURCE_URL = process.env.DATABASE_URL?.trim() ?? "";
-if (SOURCE_URL && TARGET_URL.trim() === SOURCE_URL) {
+if (!SOURCE_URL) {
   console.error(
-    "❌ DATABASE_URL 与 TARGET_DATABASE_URL 相同：增量会变成「自己和自己比」，题目内容永远不会更新。\n" +
+    "❌ 未设置 DATABASE_URL（增量同步的「源」库）。\n" +
+      "请在 .env / .env.local 中配置指向本地 PostgreSQL 的 DATABASE_URL，或在命令前写出：\n" +
+      '  DATABASE_URL="postgresql://…本地…" TARGET_DATABASE_URL="postgresql://…Neon…" npm run sync-db:incremental'
+  );
+  process.exit(1);
+}
+
+if (TARGET_URL === SOURCE_URL) {
+  console.error(
+    "❌ DATABASE_URL 与 TARGET_DATABASE_URL 相同：增量会变成「自己和自己比」，变更数永远为 0。\n" +
       "请把 DATABASE_URL 指向本地 PostgreSQL，TARGET_DATABASE_URL 单独指向 Neon。"
   );
   process.exit(1);
 }
-if (!SOURCE_URL) {
-  console.warn("⚠️ 未设置 DATABASE_URL，请确认 Prisma 能连上作为「源」的本地库。\n");
-}
+
+console.log(
+  `🔗 源: ${dbUrlHostPreview(SOURCE_URL)}  →  目标: ${dbUrlHostPreview(TARGET_URL)}\n`
+);
 
 const FULL_JUNCTION = process.env.SYNC_FULL_JUNCTION === "1";
 const PRUNE_DELETED = process.env.SYNC_PRUNE_DELETED === "1";
 const DRY_RUN = process.env.SYNC_DRY_RUN === "1";
 
-const sourceDb = new PrismaClient();
+const sourceDb = new PrismaClient({
+  datasources: { db: { url: SOURCE_URL } },
+});
 const targetDb = new PrismaClient({
   datasources: { db: { url: TARGET_URL } },
 });
