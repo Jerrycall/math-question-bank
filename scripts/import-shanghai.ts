@@ -26,14 +26,14 @@ function starsToDifficulty(stars: string): Difficulty {
 }
 
 // 从正文提取 题目 / 答案 / 解析
-// 「**答案**」「**解析**」必须出现在行首（可有前导空白），避免题干里的 **答案** 字样
-// 或非行首的段落被非贪婪 *? 提前截断，进而丢掉 $$...\begin{cases} 等公式片段（如 D336 类题目）。
+// 「**答案**」「**解析**」须为**独占一行**的小标题（行首可有空白，行内不能有其它字），
+// 避免「**答案**见文末」或与正文同在一行时被当成截断点；也避免题干中间出现 **答案** 时截断公式。
 function extractSections(body: string): { question: string; answer: string; analysis: string } {
   const questionMatch = body.match(
-    /\*\*题目\*\*\s*[\n\r]+([\s\S]*?)(?:^\s*\*\*答案\*\*)/im
+    /\*\*题目\*\*\s*[\n\r]+([\s\S]*?)(?:^\s*\*\*答案\*\*\s*[\n\r])/im
   );
   const answerMatch = body.match(
-    /\*\*答案\*\*\s*[\n\r]+([\s\S]*?)(?:^\s*\*\*解析\*\*)/im
+    /\*\*答案\*\*\s*[\n\r]+([\s\S]*?)(?:^\s*\*\*解析\*\*\s*[\n\r])/im
   );
   const analysisMatch = body.match(/\*\*解析\*\*\s*[\n\r]+([\s\S]*)/im);
 
