@@ -25,23 +25,36 @@ function starsToDifficulty(stars: string): Difficulty {
   return "HARD";
 }
 
-// 从正文提取 题目 / 答案 / 解析
-// 「**答案**」「**解析**」须为**独占一行**的小标题（行首可有空白，行内不能有其它字），
-// 避免「**答案**见文末」或与正文同在一行时被当成截断点；也避免题干中间出现 **答案** 时截断公式。
+// 从正文提取 题目 / 答案 / 解析（按行切分，避免正则跨多行 $$…$$ 时误判）
+// 仅当某一行的 trim 结果严格为「**答案**」「**解析**」时才视为区块标题（与 D336 类多行 cases 兼容）。
 function extractSections(body: string): { question: string; answer: string; analysis: string } {
-  const questionMatch = body.match(
-    /\*\*题目\*\*\s*[\n\r]+([\s\S]*?)(?:^\s*\*\*答案\*\*\s*[\n\r])/im
-  );
-  const answerMatch = body.match(
-    /\*\*答案\*\*\s*[\n\r]+([\s\S]*?)(?:^\s*\*\*解析\*\*\s*[\n\r])/im
-  );
-  const analysisMatch = body.match(/\*\*解析\*\*\s*[\n\r]+([\s\S]*)/im);
+  const head = body.match(/\*\*题目\*\*\s*(?:\r\n|\n|\r)([\s\S]*)/im);
+  if (!head) {
+    return { question: "", answer: "", analysis: "" };
+  }
+  const afterQuestionTitle = head[1];
+  const lines = afterQuestionTitle.split(/\r?\n/);
 
-  return {
-    question: questionMatch ? questionMatch[1].trim() : "",
-    answer: answerMatch ? answerMatch[1].trim() : "",
-    analysis: analysisMatch ? analysisMatch[1].trim() : "",
-  };
+  const idxAnswer = lines.findIndex((l) => l.trim() === "**答案**");
+  if (idxAnswer < 0) {
+    return { question: afterQuestionTitle.trim(), answer: "", analysis: "" };
+  }
+
+  const question = lines.slice(0, idxAnswer).join("\n").trim();
+  const afterAnswerTitle = lines.slice(idxAnswer + 1);
+  const idxAnalysis = afterAnswerTitle.findIndex((l) => l.trim() === "**解析**");
+
+  let answer: string;
+  let analysis: string;
+  if (idxAnalysis < 0) {
+    answer = afterAnswerTitle.join("\n").trim();
+    analysis = "";
+  } else {
+    answer = afterAnswerTitle.slice(0, idxAnalysis).join("\n").trim();
+    analysis = afterAnswerTitle.slice(idxAnalysis + 1).join("\n").trim();
+  }
+
+  return { question, answer, analysis };
 }
 
 function slugify(name: string): string {
