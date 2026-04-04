@@ -27,6 +27,18 @@ if (!TARGET_URL?.trim()) {
   process.exit(1);
 }
 
+const SOURCE_URL = process.env.DATABASE_URL?.trim() ?? "";
+if (SOURCE_URL && TARGET_URL.trim() === SOURCE_URL) {
+  console.error(
+    "❌ DATABASE_URL 与 TARGET_DATABASE_URL 相同：增量会变成「自己和自己比」，题目内容永远不会更新。\n" +
+      "请把 DATABASE_URL 指向本地 PostgreSQL，TARGET_DATABASE_URL 单独指向 Neon。"
+  );
+  process.exit(1);
+}
+if (!SOURCE_URL) {
+  console.warn("⚠️ 未设置 DATABASE_URL，请确认 Prisma 能连上作为「源」的本地库。\n");
+}
+
 const FULL_JUNCTION = process.env.SYNC_FULL_JUNCTION === "1";
 const PRUNE_DELETED = process.env.SYNC_PRUNE_DELETED === "1";
 const DRY_RUN = process.env.SYNC_DRY_RUN === "1";
