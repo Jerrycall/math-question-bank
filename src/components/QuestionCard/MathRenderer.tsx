@@ -35,6 +35,19 @@ function preprocessWikiLinks(text: string): string {
 }
 
 /**
+ * KaTeX 不支持 LaTeX 的 \\overparen（弧标记）；题干里又常见少写花括号：「\\overparen AB」。
+ * 先规范为 \\overparen{…}，再由 rehypeKatex 的 macro 渲染为 \\overset{\\frown}{…}。
+ */
+function preprocessOverparen(text: string): string {
+  let t = text.replace(/\\overparen(\s+)\{/g, "\\overparen{");
+  t = t.replace(
+    /\\overparen(\s+)([A-Za-z][A-Za-z0-9']*)/g,
+    (_full, _sp: string, letters: string) => `\\overparen{${letters}}`
+  );
+  return t;
+}
+
+/**
  * remark-math 在「$$」与公式首段同一行时会把首段吞进 meta；闭合「$$」与末段同一行时可能把后续正文并进公式。
  * 规范化换行后，\\begin{cases} 等多行块公式才能被 KaTeX 正确解析（如上海题集 D336）。
  */
@@ -47,9 +60,14 @@ function normalizeDisplayMathFences(text: string): string {
   return t;
 }
 
+const KATEX_MACROS = {
+  "\\overparen": "\\overset{\\frown}{#1}",
+  "\\Overparen": "\\overset{\\frown}{#1}",
+};
+
 function preprocessMarkdown(text: string): string {
   return normalizeDisplayMathFences(
-    preprocessWikiLinks(preprocessObsidianImages(text))
+    preprocessOverparen(preprocessWikiLinks(preprocessObsidianImages(text)))
   );
 }
 
@@ -64,7 +82,7 @@ export function MathRenderer({ content, className }: MathRendererProps) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[[rehypeKatex, { macros: KATEX_MACROS }]]}
         components={{
           table: ({ children, ...props }) => (
             <div className="overflow-x-auto my-4">
