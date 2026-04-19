@@ -84,6 +84,12 @@
   page-break-inside: avoid;
 }
 
+/* 首题若也 avoid，剩余高度不够时整题会被挪到第 2 页，第一页只剩文档头、像空白页 */
+.qList > .qBlock:first-child {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
 .qHead {
   display: flex;
   align-items: flex-start;
@@ -308,6 +314,11 @@
     box-shadow: none !important;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .qList > .qBlock:first-child {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
   }
 
   .pageBreakBefore {
