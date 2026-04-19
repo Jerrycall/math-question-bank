@@ -160,9 +160,23 @@
   margin-top: 0;
 }
 
+/* 大图仅限制宽度会竖向过长；限制高度并保持比例 */
 .qStem :global(.prose img) {
   max-width: 100%;
+  max-height: min(52vh, 360px);
+  width: auto;
   height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.introBody :global(.prose img),
+.boxBody :global(.prose img) {
+  max-width: 100%;
+  max-height: min(52vh, 360px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
   border-radius: 6px;
 }
 
@@ -343,6 +357,13 @@
   .analysisBox {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* 打印/PDF：用 mm 限制高度，避免一图占满一页 */
+  .qStem :global(.prose img),
+  .introBody :global(.prose img),
+  .boxBody :global(.prose img) {
+    max-height: 115mm !important;
   }
 
   /* KaTeX 与行内公式在 PDF 中更清晰 */

@@ -122,11 +122,11 @@ export function MathRenderer({ content, className }: MathRendererProps) {
               imgSrc = "/" + imgSrc;
             }
             return (
-              <span className="my-3 block">
+              <span className="my-3 block text-center">
                 <img
                   src={imgSrc}
                   alt={alt ?? "题目图片"}
-                  className="max-w-full h-auto rounded-lg border border-border"
+                  className="max-w-full max-h-[min(60vh,28rem)] w-auto h-auto object-contain rounded-lg border border-border mx-auto"
                   loading="lazy"
                   {...props}
                 />
