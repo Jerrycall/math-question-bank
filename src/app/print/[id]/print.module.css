@@ -84,7 +84,7 @@
   page-break-inside: avoid;
 }
 
-/* 首题若也 avoid，剩余高度不够时整题会被挪到第 2 页，第一页只剩文档头、像空白页 */
+/* 屏上预览：首题单独允许跨页，减轻「第一页只有标题」现象（打印见 @media print 内对 .qList） */
 .qList > .qBlock:first-child {
   break-inside: auto;
   page-break-inside: auto;
@@ -324,13 +324,16 @@
     print-color-adjust: exact;
   }
 
-  .qBlock {
-    box-shadow: none !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+  /*
+   * flex 子项在打印时常被当成「整块」无法分页，整题会被挪到下一页 → 第一页只剩文档头。
+   * 改为普通块流后，题干才能从第一页接着排。
+   */
+  .qList {
+    display: block !important;
   }
 
-  .qList > .qBlock:first-child {
+  .qBlock {
+    box-shadow: none !important;
     break-inside: auto !important;
     page-break-inside: auto !important;
   }
