@@ -13,6 +13,10 @@
  *   SYNC_FULL_JUNCTION=1   全量重同步 question_tags 与 question_relations（与旧版 sync-db 同量级，但更一致）
  *   SYNC_PRUNE_DELETED=1   删除「本地已不存在」的题目/标签/关联（危险，先备份）
  *   SYNC_DRY_RUN=1         只打印统计，不写库
+ *
+ * Neon 偶发 P1001：题目 upsert 会自动重试最多 5 次；仍失败请换网络或给连接串加
+ *   ?connect_timeout=60&pool_timeout=60
+ * 中断后可重新执行本脚本（幂等）。
  */
 
 import { existsSync, readFileSync } from "fs";
@@ -61,6 +65,44 @@ function dbUrlHostPreview(url: string): string {
   } catch {
     return "(无法解析连接串)";
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Neon / 网络抖动时 Prisma 常见 P1001、P1017 */
+function isDbReachabilityError(e: unknown): boolean {
+  if (e && typeof e === "object" && "code" in e) {
+    const c = (e as { code?: string }).code;
+    if (c === "P1001" || c === "P1017") return true;
+  }
+  const msg = e instanceof Error ? e.message : String(e);
+  return /Can't reach database server|P1001|P1017|ETIMEDOUT|ECONNRESET|Connection terminated/i.test(
+    msg
+  );
+}
+
+async function withNeonRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  maxAttempts = 5
+): Promise<T> {
+  let last: unknown;
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      if (!isDbReachabilityError(e) || i === maxAttempts) throw e;
+      const waitMs = Math.min(10_000, 1500 * 2 ** (i - 1));
+      console.warn(
+        `  ⚠ ${label}（${i}/${maxAttempts}）目标库不可达，${waitMs}ms 后重试…`
+      );
+      await sleep(waitMs);
+    }
+  }
+  throw last;
 }
 
 loadEnvFilesFromProjectRoot();
@@ -392,35 +434,37 @@ async function main() {
   let questionUpserted = 0;
   for (const q of sourceQuestions) {
     if (!modifiedQuestionIds.has(q.id)) continue;
-    await targetDb.question.upsert({
-      where: { id: q.id },
-      create: {
-        id: q.id,
-        slug: q.slug,
-        title: q.title,
-        content: q.content,
-        answer: q.answer,
-        analysis: q.analysis,
-        difficulty: q.difficulty,
-        source: q.source,
-        sourceYear: q.sourceYear,
-        mdFilePath: q.mdFilePath,
-        createdAt: q.createdAt,
-        updatedAt: q.updatedAt,
-      },
-      update: {
-        slug: q.slug,
-        title: q.title,
-        content: q.content,
-        answer: q.answer,
-        analysis: q.analysis,
-        difficulty: q.difficulty,
-        source: q.source,
-        sourceYear: q.sourceYear,
-        mdFilePath: q.mdFilePath,
-        updatedAt: q.updatedAt,
-      },
-    });
+    await withNeonRetry(`题目 upsert ${q.slug}`, () =>
+      targetDb.question.upsert({
+        where: { id: q.id },
+        create: {
+          id: q.id,
+          slug: q.slug,
+          title: q.title,
+          content: q.content,
+          answer: q.answer,
+          analysis: q.analysis,
+          difficulty: q.difficulty,
+          source: q.source,
+          sourceYear: q.sourceYear,
+          mdFilePath: q.mdFilePath,
+          createdAt: q.createdAt,
+          updatedAt: q.updatedAt,
+        },
+        update: {
+          slug: q.slug,
+          title: q.title,
+          content: q.content,
+          answer: q.answer,
+          analysis: q.analysis,
+          difficulty: q.difficulty,
+          source: q.source,
+          sourceYear: q.sourceYear,
+          mdFilePath: q.mdFilePath,
+          updatedAt: q.updatedAt,
+        },
+      })
+    );
     questionUpserted++;
   }
   console.log(`  ✅ 题目 upsert: ${questionUpserted}`);
