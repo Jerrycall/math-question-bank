@@ -40,6 +40,7 @@
     "cytoscape": "^3.30.2",
     "date-fns": "^3.6.0",
     "gray-matter": "^4.0.3",
+    "image-size": "^2.0.2",
     "ioredis": "^5.4.1",
     "katex": "^0.16.11",
     "lucide-react": "^0.414.0",

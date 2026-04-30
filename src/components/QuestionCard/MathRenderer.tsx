@@ -7,6 +7,10 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import "katex/dist/katex.min.css";
+import {
+  imageIntrinsicLookupKey,
+  preprocessObsidianImages,
+} from "@/lib/markdownImages";
 
 interface MathRendererProps {
   content: string;
@@ -16,6 +20,13 @@ interface MathRendererProps {
    * 建议：`${questionId}:content` / `:answer` / `:analysis` 等。
    */
   imageResizeScope?: string;
+  /**
+   * 可选：本地 /uploads 图片的像素尺寸（键为去掉协议的 URL，与 imageIntrinsicLookupKey 一致）。
+   * 打印页由服务端读 public 文件填入，使 PDF 按文件真实大小显示而非被 CSS 放大。
+   */
+  imageIntrinsicBySrc?: Readonly<
+    Record<string, { width: number; height: number }>
+  >;
 }
 
 const IMG_WIDTH_STORAGE_PREFIX = "mqb:imgW:v1:";
@@ -29,10 +40,14 @@ function ResizableQuestionImage({
   src: srcProp,
   alt,
   imageResizeScope,
+  imageIntrinsicPixelSize,
+  width: authorWidth,
+  height: authorHeight,
   className: imgClassName,
   ...imgProps
 }: React.ImgHTMLAttributes<HTMLImageElement> & {
   imageResizeScope?: string;
+  imageIntrinsicPixelSize?: { width: number; height: number };
 }) {
   let src = (srcProp as string) ?? "";
   if (src && !/^https?:\/\//i.test(src) && !src.startsWith("/")) {
@@ -86,6 +101,25 @@ function ResizableQuestionImage({
     };
   }, [storageKey]);
 
+  const useAuthorOrFileSize =
+    widthPx == null &&
+    (authorWidth != null ||
+      authorHeight != null ||
+      imageIntrinsicPixelSize != null);
+
+  let htmlWidth: number | string | undefined;
+  let htmlHeight: number | string | undefined;
+  if (authorWidth != null || authorHeight != null) {
+    htmlWidth = authorWidth;
+    htmlHeight = authorHeight;
+  } else if (widthPx == null && imageIntrinsicPixelSize) {
+    htmlWidth = imageIntrinsicPixelSize.width;
+    htmlHeight = imageIntrinsicPixelSize.height;
+  } else {
+    htmlWidth = undefined;
+    htmlHeight = undefined;
+  }
+
   return (
     <span
       ref={wrapperRef}
@@ -106,8 +140,11 @@ function ResizableQuestionImage({
         {...imgProps}
         src={src}
         alt={alt ?? "题目图片"}
+        width={htmlWidth}
+        height={htmlHeight}
         className={cn(
-          "block h-auto max-h-[min(85vh,42rem)] w-full max-w-full object-contain rounded-md",
+          "block h-auto max-h-[min(85vh,42rem)] max-w-full object-contain rounded-md",
+          widthPx != null ? "w-full" : useAuthorOrFileSize ? "w-auto" : "w-full",
           imgClassName
         )}
         loading="lazy"
@@ -115,16 +152,6 @@ function ResizableQuestionImage({
       />
     </span>
   );
-}
-
-// 将 Obsidian 双链图片 ![[path]] 转为标准 Markdown ![](url)，便于显示
-function preprocessObsidianImages(text: string): string {
-  return text.replace(/!\s*\[\[([^\]]+)\]\]/g, (_, inner: string) => {
-    const path = inner.split("|")[0].trim();
-    if (!path) return "![]()";
-    if (/^https?:\/\//i.test(path) || path.startsWith("/")) return `![](${path})`;
-    return `![](/uploads/${encodeURIComponent(path)})`;
-  });
 }
 
 /** Obsidian 笔记双链 [[页面]] 或 [[页面|显示名]] → 加粗显示（避免整段裸链） */
@@ -179,6 +206,7 @@ export function MathRenderer({
   content,
   className,
   imageResizeScope,
+  imageIntrinsicBySrc,
 }: MathRendererProps) {
   const processedContent = preprocessMarkdown(content);
   return (
@@ -223,14 +251,29 @@ export function MathRenderer({
               {children}
             </blockquote>
           ),
-          img: ({ src, alt, ...props }) => (
-            <ResizableQuestionImage
-              src={(src as string) ?? ""}
-              alt={alt as string | undefined}
-              imageResizeScope={imageResizeScope}
-              {...props}
-            />
-          ),
+          img: ({ src, alt, width, height, ...props }) => {
+            let resolved = (src as string) ?? "";
+            if (
+              resolved &&
+              !/^https?:\/\//i.test(resolved) &&
+              !resolved.startsWith("/")
+            ) {
+              resolved = "/" + resolved;
+            }
+            const intrinsicKey = imageIntrinsicLookupKey(resolved);
+            const intrinsic = imageIntrinsicBySrc?.[intrinsicKey];
+            return (
+              <ResizableQuestionImage
+                src={resolved}
+                alt={alt as string | undefined}
+                imageResizeScope={imageResizeScope}
+                imageIntrinsicPixelSize={intrinsic}
+                width={width as number | string | undefined}
+                height={height as number | string | undefined}
+                {...props}
+              />
+            );
+          },
           code: ({ children, className: codeClass, ...props }) => {
             const isInline = !codeClass;
             if (isInline) {

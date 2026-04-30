@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 import { MathRenderer } from "@/components/QuestionCard/MathRenderer";
+import { extractImageSrcsFromMarkdown } from "@/lib/markdownImages";
+import { buildIntrinsicSizeMapForPrint } from "@/lib/localImageIntrinsicSize";
 import { DIFFICULTY_LABELS, type Difficulty } from "@/types";
 import { PrintButton } from "./PrintButton";
 import styles from "./print.module.css";
@@ -172,6 +174,17 @@ export default async function PrintPage({
     return PRINT_QUESTION_GAP_PX[key];
   }
 
+  const textChunksForImages: string[] = [];
+  if (introContent.trim()) textChunksForImages.push(introContent);
+  for (const q of rows) {
+    textChunksForImages.push(q.content, q.answer, q.analysis ?? "");
+  }
+  const imageSrcSet = new Set<string>();
+  for (const t of textChunksForImages) {
+    for (const s of extractImageSrcsFromMarkdown(t)) imageSrcSet.add(s);
+  }
+  const imageIntrinsicBySrc = await buildIntrinsicSizeMapForPrint(imageSrcSet);
+
   return (
     <div className={styles.page}>
       <div className={styles.printButton}>
@@ -201,7 +214,10 @@ export default async function PrintPage({
         <section className={styles.introSection}>
           <h2 className={styles.introTitle}>{introTitle}</h2>
           <div className={styles.introBody}>
-            <MathRenderer content={introContent} />
+            <MathRenderer
+              content={introContent}
+              imageIntrinsicBySrc={imageIntrinsicBySrc}
+            />
           </div>
         </section>
       ) : null}
@@ -231,7 +247,10 @@ export default async function PrintPage({
               </div>
 
               <div className={styles.qStem}>
-                <MathRenderer content={q.content} />
+                <MathRenderer
+                  content={q.content}
+                  imageIntrinsicBySrc={imageIntrinsicBySrc}
+                />
               </div>
 
               {showAnswers && (
@@ -239,14 +258,20 @@ export default async function PrintPage({
                   <div className={styles.answerBox}>
                     <div className={styles.boxLabel}>标准答案</div>
                     <div className={styles.boxBody}>
-                      <MathRenderer content={q.answer} />
+                      <MathRenderer
+                        content={q.answer}
+                        imageIntrinsicBySrc={imageIntrinsicBySrc}
+                      />
                     </div>
                   </div>
 
                   <div className={styles.analysisBox}>
                     <div className={styles.boxLabel}>详细解析</div>
                     <div className={styles.boxBody}>
-                      <MathRenderer content={q.analysis || "（暂无解析）"} />
+                      <MathRenderer
+                        content={q.analysis || "（暂无解析）"}
+                        imageIntrinsicBySrc={imageIntrinsicBySrc}
+                      />
                     </div>
                   </div>
                 </>
