@@ -213,7 +213,14 @@ export function ReviewSession({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg bg-muted/40 p-4">
-            <MathRenderer content={current.question.content} />
+            <MathRenderer
+              content={current.question.content}
+              imageResizeScope={
+                current.question.id
+                  ? `${current.question.id}:content`
+                  : undefined
+              }
+            />
           </div>
 
           {step === "question" && (
@@ -231,7 +238,14 @@ export function ReviewSession({
               {/* 答案 */}
               <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 p-4">
                 <p className="text-xs font-semibold text-green-700 mb-2">标准答案</p>
-                <MathRenderer content={current.question.answer} />
+                <MathRenderer
+                  content={current.question.answer}
+                  imageResizeScope={
+                    current.question.id
+                      ? `${current.question.id}:answer`
+                      : undefined
+                  }
+                />
               </div>
 
               {/* 评分按钮 */}

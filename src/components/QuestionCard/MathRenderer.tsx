@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -11,6 +11,110 @@ import "katex/dist/katex.min.css";
 interface MathRendererProps {
   content: string;
   className?: string;
+  /**
+   * 传入后每张图按「scope + 图片路径」写入 localStorage，换页后仍保持宽度。
+   * 建议：`${questionId}:content` / `:answer` / `:analysis` 等。
+   */
+  imageResizeScope?: string;
+}
+
+const IMG_WIDTH_STORAGE_PREFIX = "mqb:imgW:v1:";
+
+function imageWidthStorageKey(scope: string, src: string): string {
+  const path = src.replace(/^https?:\/\//i, "");
+  return `${IMG_WIDTH_STORAGE_PREFIX}${scope}:${encodeURIComponent(path)}`;
+}
+
+function ResizableQuestionImage({
+  src: srcProp,
+  alt,
+  imageResizeScope,
+  className: imgClassName,
+  ...imgProps
+}: React.ImgHTMLAttributes<HTMLImageElement> & {
+  imageResizeScope?: string;
+}) {
+  let src = (srcProp as string) ?? "";
+  if (src && !/^https?:\/\//i.test(src) && !src.startsWith("/")) {
+    src = "/" + src;
+  }
+
+  const storageKey = imageResizeScope
+    ? imageWidthStorageKey(imageResizeScope, src)
+    : null;
+  const [widthPx, setWidthPx] = useState<number | null>(null);
+  const wrapperRef = useRef<HTMLSpanElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return;
+      const w = parseInt(raw, 10);
+      if (Number.isFinite(w) && w >= 80 && w <= 4200) setWidthPx(w);
+    } catch {
+      /* ignore */
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || !storageKey) return;
+
+    const scheduleSave = (w: number) => {
+      if (w < 80 || w > 4200) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        try {
+          localStorage.setItem(storageKey, String(Math.round(w)));
+        } catch {
+          /* quota */
+        }
+        debounceRef.current = null;
+      }, 350);
+    };
+
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) scheduleSave(w);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [storageKey]);
+
+  return (
+    <span
+      ref={wrapperRef}
+      style={widthPx != null ? { width: `${widthPx}px` } : undefined}
+      className={cn(
+        "my-3 mx-auto block min-w-[120px] max-w-full overflow-auto",
+        widthPx == null ? "w-max" : "",
+        storageKey && "resize-x print:resize-none",
+        "rounded-lg border border-dashed border-border/50 hover:border-primary/40 shadow-sm"
+      )}
+      title={
+        storageKey
+          ? "拖动右侧边缘调整宽度；宽度会按题目记在本浏览器"
+          : "拖动右侧边缘可调整插图显示宽度（打印时无效）"
+      }
+    >
+      <img
+        {...imgProps}
+        src={src}
+        alt={alt ?? "题目图片"}
+        className={cn(
+          "block h-auto max-h-[min(85vh,42rem)] w-full max-w-full object-contain rounded-md",
+          imgClassName
+        )}
+        loading="lazy"
+        draggable={false}
+      />
+    </span>
+  );
 }
 
 // 将 Obsidian 双链图片 ![[path]] 转为标准 Markdown ![](url)，便于显示
@@ -71,7 +175,11 @@ function preprocessMarkdown(text: string): string {
   );
 }
 
-export function MathRenderer({ content, className }: MathRendererProps) {
+export function MathRenderer({
+  content,
+  className,
+  imageResizeScope,
+}: MathRendererProps) {
   const processedContent = preprocessMarkdown(content);
   return (
     <div
@@ -115,34 +223,14 @@ export function MathRenderer({ content, className }: MathRendererProps) {
               {children}
             </blockquote>
           ),
-          img: ({ src, alt, ...props }) => {
-            // 相对路径转成站根绝对路径，避免在 /questions/xxx 等页面请求到错误地址
-            let imgSrc = src ?? "";
-            if (imgSrc && !/^https?:\/\//i.test(imgSrc) && !imgSrc.startsWith("/")) {
-              imgSrc = "/" + imgSrc;
-            }
-            return (
-              <span
-                className={cn(
-                  "my-3 mx-auto block w-max max-w-full min-w-[120px] overflow-auto",
-                  /* 桌面端拖动画布右缘调整宽度；触控设备多数不支持原生 resize */
-                  "resize-x print:resize-none",
-                  "rounded-lg border border-dashed border-border/50 hover:border-primary/40",
-                  "shadow-sm"
-                )}
-                title="拖动右侧边缘可调整插图显示宽度（打印时无效）"
-              >
-                <img
-                  src={imgSrc}
-                  alt={alt ?? "题目图片"}
-                  className="block h-auto max-h-[min(85vh,42rem)] w-full max-w-full object-contain rounded-md"
-                  loading="lazy"
-                  draggable={false}
-                  {...props}
-                />
-              </span>
-            );
-          },
+          img: ({ src, alt, ...props }) => (
+            <ResizableQuestionImage
+              src={(src as string) ?? ""}
+              alt={alt as string | undefined}
+              imageResizeScope={imageResizeScope}
+              {...props}
+            />
+          ),
           code: ({ children, className: codeClass, ...props }) => {
             const isInline = !codeClass;
             if (isInline) {

@@ -296,7 +296,12 @@ export function QuestionCard({
       <CardContent className="space-y-4">
         {/* 题目内容 */}
         <div className="rounded-lg bg-muted/40 p-4">
-          <MathRenderer content={question.content} />
+          <MathRenderer
+            content={question.content}
+            imageResizeScope={
+              question.id ? `${question.id}:content` : undefined
+            }
+          />
         </div>
 
         {/* 标签区域 */}
@@ -357,7 +362,12 @@ export function QuestionCard({
                 <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2 uppercase tracking-wide">
                   标准答案
                 </p>
-                <MathRenderer content={question.answer} />
+                <MathRenderer
+                  content={question.answer}
+                  imageResizeScope={
+                    question.id ? `${question.id}:answer` : undefined
+                  }
+                />
               </div>
 
               {/* 解析 */}
@@ -366,7 +376,12 @@ export function QuestionCard({
                   <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-2 uppercase tracking-wide">
                     详细解析
                   </p>
-                  <MathRenderer content={question.analysis} />
+                  <MathRenderer
+                    content={question.analysis}
+                    imageResizeScope={
+                      question.id ? `${question.id}:analysis` : undefined
+                    }
+                  />
                 </div>
               )}
             </div>

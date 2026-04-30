@@ -326,7 +326,12 @@ export default function QuestionDetailPage() {
 
           {aiResponse && (
             <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
-              <MathRenderer content={aiResponse} />
+              <MathRenderer
+                content={aiResponse}
+                imageResizeScope={
+                  question.id ? `${question.id}:ai` : undefined
+                }
+              />
             </div>
           )}
         </CardContent>
@@ -442,7 +447,14 @@ export default function QuestionDetailPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">改变点：{v.changedAspect}</p>
                 <div className="bg-muted/40 rounded p-3">
-                  <MathRenderer content={v.question} />
+                  <MathRenderer
+                    content={v.question}
+                    imageResizeScope={
+                      question.id
+                        ? `${question.id}:variant:${i}:q`
+                        : undefined
+                    }
+                  />
                 </div>
                 <details className="text-sm">
                   <summary className="cursor-pointer text-muted-foreground hover:text-foreground text-xs">
@@ -450,10 +462,26 @@ export default function QuestionDetailPage() {
                   </summary>
                   <div className="mt-2 space-y-2">
                     <div className="bg-green-50 dark:bg-green-950/20 rounded p-3 text-xs">
-                      <strong>答案：</strong><MathRenderer content={v.answer} />
+                      <strong>答案：</strong>
+                      <MathRenderer
+                        content={v.answer}
+                        imageResizeScope={
+                          question.id
+                            ? `${question.id}:variant:${i}:a`
+                            : undefined
+                        }
+                      />
                     </div>
                     <div className="bg-blue-50 dark:bg-blue-950/20 rounded p-3 text-xs">
-                      <strong>解析：</strong><MathRenderer content={v.analysis} />
+                      <strong>解析：</strong>
+                      <MathRenderer
+                        content={v.analysis}
+                        imageResizeScope={
+                          question.id
+                            ? `${question.id}:variant:${i}:x`
+                            : undefined
+                        }
+                      />
                     </div>
                   </div>
                 </details>
