@@ -91,7 +91,7 @@ function ResizableQuestionImage({
       ref={wrapperRef}
       style={widthPx != null ? { width: `${widthPx}px` } : undefined}
       className={cn(
-        "my-3 mx-auto block min-w-[120px] max-w-full overflow-auto",
+        "mqb-md-img-wrap my-3 mx-auto block min-w-[120px] max-w-full overflow-auto",
         widthPx == null ? "w-max" : "",
         storageKey && "resize-x print:resize-none",
         "rounded-lg border border-dashed border-border/50 hover:border-primary/40 shadow-sm"
