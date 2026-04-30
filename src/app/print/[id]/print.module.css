@@ -320,8 +320,8 @@
   }
 
   /*
-   * flex 子项在打印时常被当成「整块」无法分页，整题会被挪到下一页 → 第一页只剩文档头。
-   * 改为普通块流后，题干才能从第一页接着排。
+   * flex 子项在打印时分页行为差，改为块流。
+   * 整题保持 avoid：不在题目中间换页（过长整题会移到下一页）。
    */
   .qList {
     display: block !important;
@@ -329,8 +329,14 @@
 
   .qBlock {
     box-shadow: none !important;
-    break-inside: auto !important;
-    page-break-inside: auto !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* 屏上为减轻首屏空白曾允许首题跨页；打印时与所有题一致，整题不拆开 */
+  .qList > .qBlock:first-child {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .pageBreakBefore {
