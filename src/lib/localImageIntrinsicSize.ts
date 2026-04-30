@@ -6,6 +6,22 @@ import {
   normalizeMathRendererImageSrc,
 } from "@/lib/markdownImages";
 
+/** 打印用的 layout 属性不宜使用原始像素（如 3000px），否则部分浏览器在 PDF 中仍按过大「最小尺寸」排版 */
+const PRINT_IMAGE_MAX_LONG_SIDE_PX = 420;
+
+function capDimensionsForPrintLayout(
+  width: number,
+  height: number
+): { width: number; height: number } {
+  const long = Math.max(width, height);
+  if (long <= PRINT_IMAGE_MAX_LONG_SIDE_PX) return { width, height };
+  const scale = PRINT_IMAGE_MAX_LONG_SIDE_PX / long;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
 function resolveUploadDiskPath(normalizedUrlPath: string): string | null {
   const rel = normalizedUrlPath.replace(/^\//, "");
   const base = join(process.cwd(), "public");
@@ -47,7 +63,7 @@ export async function buildIntrinsicSizeMapForPrint(
     try {
       const r = await imageSizeFromFile(disk);
       if (r.width && r.height && r.width > 0 && r.height > 0) {
-        map[key] = { width: r.width, height: r.height };
+        map[key] = capDimensionsForPrintLayout(r.width, r.height);
       }
     } catch {
       /* 非图片或损坏 */
