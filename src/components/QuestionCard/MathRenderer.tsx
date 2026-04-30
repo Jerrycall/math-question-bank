@@ -122,12 +122,22 @@ export function MathRenderer({ content, className }: MathRendererProps) {
               imgSrc = "/" + imgSrc;
             }
             return (
-              <span className="my-3 block text-center">
+              <span
+                className={cn(
+                  "my-3 mx-auto block w-max max-w-full min-w-[120px] overflow-auto",
+                  /* 桌面端拖动画布右缘调整宽度；触控设备多数不支持原生 resize */
+                  "resize-x print:resize-none",
+                  "rounded-lg border border-dashed border-border/50 hover:border-primary/40",
+                  "shadow-sm"
+                )}
+                title="拖动右侧边缘可调整插图显示宽度（打印时无效）"
+              >
                 <img
                   src={imgSrc}
                   alt={alt ?? "题目图片"}
-                  className="max-w-full max-h-[min(60vh,28rem)] w-auto h-auto object-contain rounded-lg border border-border mx-auto"
+                  className="block h-auto max-h-[min(85vh,42rem)] w-full max-w-full object-contain rounded-md"
                   loading="lazy"
+                  draggable={false}
                   {...props}
                 />
               </span>
